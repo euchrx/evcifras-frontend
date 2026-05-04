@@ -1,6 +1,12 @@
 import { useState } from "react";
-import type { ReactElement } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import type { FormEvent, ReactElement } from "react";
+import {
+  Link,
+  NavLink,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import {
   BookOpen,
   Headphones,
@@ -69,8 +75,14 @@ export function EmptyState({
 
 export function AppLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, isAuthenticated, isEditor, logout } = useAuth();
+
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [listenSearch, setListenSearch] = useState("");
+
+  const isListenRoute =
+    location.pathname === "/ouvir" || location.pathname.startsWith("/ouvir/");
 
   const navItems: NavItem[] = [
     {
@@ -137,6 +149,19 @@ export function AppLayout() {
     navigate("/");
   }
 
+  function handleListenSearchSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const query = listenSearch.trim();
+
+    if (!query) {
+      navigate("/ouvir");
+      return;
+    }
+
+    navigate(`/ouvir?q=${encodeURIComponent(query)}`);
+  }
+
   return (
     <div className="min-h-screen bg-[#070A12] pb-28 text-white">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
@@ -152,7 +177,6 @@ export function AppLayout() {
             className="group flex shrink-0 items-center gap-3"
             onClick={() => setMobileOpen(false)}
           >
-
             <div className="hidden min-w-0 md:block">
               <img
                 src="/logo.png"
@@ -162,77 +186,98 @@ export function AppLayout() {
             </div>
           </Link>
 
-          <nav className="hidden min-w-0 flex-1 items-center justify-center gap-2 lg:flex">
-            {visibleNavItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={getDesktopNavLinkClass}
-                title={item.label}
-                aria-label={item.label}
+          {isListenRoute ? (
+            <form
+              onSubmit={handleListenSearchSubmit}
+              className="flex min-w-0 flex-1 justify-center"
+            >
+              <div className="relative w-full max-w-3xl">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-violet-300" />
+
+                <input
+                  value={listenSearch}
+                  onChange={(event) => setListenSearch(event.target.value)}
+                  placeholder="O que você quer ouvir hoje?"
+                  className="h-12 w-full rounded-2xl border border-violet-400/30 bg-violet-500/10 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-violet-200/70 focus:border-violet-300/60 focus:bg-violet-500/15"
+                />
+              </div>
+            </form>
+          ) : (
+            <>
+              <nav className="hidden min-w-0 flex-1 items-center justify-center gap-2 lg:flex">
+                {visibleNavItems.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={getDesktopNavLinkClass}
+                    title={item.label}
+                    aria-label={item.label}
+                  >
+                    {item.icon}
+                  </NavLink>
+                ))}
+              </nav>
+
+              <div className="hidden shrink-0 items-center gap-2 lg:flex">
+                {isAuthenticated ? (
+                  <>
+                    <div
+                      className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-sm font-black text-white"
+                      title={`${user?.name || "Usuário"} • ${user?.role || ""
+                        }`}
+                    >
+                      {user?.name?.charAt(0)?.toUpperCase() || "U"}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10 hover:text-white"
+                      title="Sair"
+                      aria-label="Sair"
+                    >
+                      <LogOut className="h-4 w-4" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <NavLink
+                      to="/login"
+                      className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10 hover:text-white"
+                      title="Entrar"
+                      aria-label="Entrar"
+                    >
+                      <LogIn className="h-4 w-4" />
+                    </NavLink>
+
+                    <NavLink
+                      to="/cadastro"
+                      className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500 text-white shadow-lg shadow-violet-950/40 transition hover:bg-violet-400"
+                      title="Criar conta"
+                      aria-label="Criar conta"
+                    >
+                      <UserPlus className="h-4 w-4" />
+                    </NavLink>
+                  </>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setMobileOpen((current) => !current)}
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 lg:hidden"
               >
-                {item.icon}
-              </NavLink>
-            ))}
-          </nav>
-
-          <div className="hidden shrink-0 items-center gap-2 lg:flex">
-            {isAuthenticated ? (
-              <>
-                <div
-                  className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-sm font-black text-white"
-                  title={`${user?.name || "Usuário"} • ${user?.role || ""}`}
-                >
-                  {user?.name?.charAt(0)?.toUpperCase() || "U"}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10 hover:text-white"
-                  title="Sair"
-                  aria-label="Sair"
-                >
-                  <LogOut className="h-4 w-4" />
-                </button>
-              </>
-            ) : (
-              <>
-                <NavLink
-                  to="/login"
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10 hover:text-white"
-                  title="Entrar"
-                  aria-label="Entrar"
-                >
-                  <LogIn className="h-4 w-4" />
-                </NavLink>
-
-                <NavLink
-                  to="/cadastro"
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500 text-white shadow-lg shadow-violet-950/40 transition hover:bg-violet-400"
-                  title="Criar conta"
-                  aria-label="Criar conta"
-                >
-                  <UserPlus className="h-4 w-4" />
-                </NavLink>
-              </>
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setMobileOpen((current) => !current)}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 lg:hidden"
-          >
-            {mobileOpen ? (
-              <X className="h-5 w-5" />
-            ) : (
-              <Menu className="h-5 w-5" />
-            )}
-          </button>
+                {mobileOpen ? (
+                  <X className="h-5 w-5" />
+                ) : (
+                  <Menu className="h-5 w-5" />
+                )}
+              </button>
+            </>
+          )}
         </div>
 
-        {mobileOpen && (
+        {!isListenRoute && mobileOpen && (
           <div className="border-t border-white/10 bg-[#070A12]/95 px-4 py-4 backdrop-blur-xl lg:hidden">
             <nav className="mx-auto grid max-w-7xl gap-2">
               {visibleNavItems.map((item) => (

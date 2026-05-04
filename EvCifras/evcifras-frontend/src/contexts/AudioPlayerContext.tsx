@@ -76,6 +76,8 @@ const AudioPlayerContext = createContext<AudioPlayerContextValue | null>(null);
 
 export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const activeTrackIdRef = useRef<string>("");
+  const activeAudioUrlRef = useRef<string>("");
 
   const [currentTrack, setCurrentTrack] = useState<GlobalAudioTrack | null>(
     null,
@@ -97,7 +99,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     return Math.min(100, Math.max(0, (currentTime / duration) * 100));
   }, [currentTime, duration]);
 
-  const startAudio = useCallback(
+  const loadAndPlayTrack = useCallback(
     async (track: GlobalAudioTrack) => {
       const audio = audioRef.current;
 
@@ -105,13 +107,19 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const currentSrc = audio.src;
-      const nextSrc = track.audioUrl;
+      const isSameTrack =
+        activeTrackIdRef.current === track.id &&
+        activeAudioUrlRef.current === track.audioUrl;
 
-      if (!currentSrc || currentSrc !== nextSrc) {
-        audio.src = nextSrc;
+      if (!isSameTrack) {
+        activeTrackIdRef.current = track.id;
+        activeAudioUrlRef.current = track.audioUrl;
+
+        audio.src = track.audioUrl;
         audio.load();
+
         setCurrentTime(0);
+        setDuration(track.durationSec || 0);
       }
 
       audio.volume = volume;
@@ -134,11 +142,18 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       setQueue(effectiveQueue);
       setCurrentTrack(track);
       setIsExpanded(true);
-      setRequestToken((current) => current + 1);
 
-      void startAudio(track);
+      const isSameTrack =
+        activeTrackIdRef.current === track.id &&
+        activeAudioUrlRef.current === track.audioUrl;
+
+      if (!isSameTrack) {
+        setRequestToken((current) => current + 1);
+      }
+
+      void loadAndPlayTrack(track);
     },
-    [startAudio],
+    [loadAndPlayTrack],
   );
 
   const playQueue = useCallback(
@@ -152,11 +167,18 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       setQueue(nextQueue);
       setCurrentTrack(firstTrack);
       setIsExpanded(true);
-      setRequestToken((current) => current + 1);
 
-      void startAudio(firstTrack);
+      const isSameTrack =
+        activeTrackIdRef.current === firstTrack.id &&
+        activeAudioUrlRef.current === firstTrack.audioUrl;
+
+      if (!isSameTrack) {
+        setRequestToken((current) => current + 1);
+      }
+
+      void loadAndPlayTrack(firstTrack);
     },
-    [startAudio],
+    [loadAndPlayTrack],
   );
 
   const setIsPlaying = useCallback((value: boolean) => {
@@ -195,8 +217,8 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     setCurrentTrack(nextTrack);
     setRequestToken((current) => current + 1);
 
-    void startAudio(nextTrack);
-  }, [currentTrack, queue, startAudio]);
+    void loadAndPlayTrack(nextTrack);
+  }, [currentTrack, queue, loadAndPlayTrack]);
 
   const playPrevious = useCallback(() => {
     if (!currentTrack || queue.length === 0) {
@@ -212,8 +234,8 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     setCurrentTrack(previousTrack);
     setRequestToken((current) => current + 1);
 
-    void startAudio(previousTrack);
-  }, [currentTrack, queue, startAudio]);
+    void loadAndPlayTrack(previousTrack);
+  }, [currentTrack, queue, loadAndPlayTrack]);
 
   const seekToPercent = useCallback(
     (value: number) => {
@@ -262,6 +284,9 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       audio.removeAttribute("src");
       audio.load();
     }
+
+    activeTrackIdRef.current = "";
+    activeAudioUrlRef.current = "";
 
     setCurrentTrack(null);
     setIsPlayingState(false);
@@ -344,6 +369,9 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
           } else {
             setIsPlayingState(false);
           }
+        }}
+        onError={() => {
+          setIsPlayingState(false);
         }}
       />
     </AudioPlayerContext.Provider>

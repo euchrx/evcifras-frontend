@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   Clock3,
@@ -7,7 +7,6 @@ import {
   FileAudio,
   Loader2,
   Music2,
-  Search,
 } from "lucide-react";
 import { api } from "../services/api";
 import PlayAudioTrackButton from "../components/audio/PlayAudioTrackButton";
@@ -139,11 +138,17 @@ function getAlbumGroups(tracks: AudioTrack[]) {
 }
 
 export function ListenPage() {
+  const [searchParams] = useSearchParams();
+
   const [tracks, setTracks] = useState<AudioTrack[]>([]);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => searchParams.get("q") || "");
   const [typeFilter, setTypeFilter] = useState<"" | AudioTrackType>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setSearch(searchParams.get("q") || "");
+  }, [searchParams]);
 
   const filteredTracks = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -214,39 +219,26 @@ export function ListenPage() {
         Voltar para início
       </Link>
 
-      <section className="sticky top-24 z-20 mt-6 rounded-[2rem] border border-white/10 bg-[#070A12]/80 p-3 shadow-2xl shadow-black/20 backdrop-blur-xl">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-violet-300" />
+      <section className="mt-6 flex gap-2 overflow-x-auto pb-1">
+        {typeOptions.map((option) => {
+          const active = typeFilter === option.value;
 
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar música, artista, categoria ou gênero..."
-            className="h-12 w-full rounded-2xl border border-violet-400/30 bg-violet-500/10 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-violet-200/70 focus:border-violet-300/60 focus:bg-violet-500/15"
-          />
-        </div>
-
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-          {typeOptions.map((option) => {
-            const active = typeFilter === option.value;
-
-            return (
-              <button
-                key={option.value || "ALL"}
-                type="button"
-                onClick={() => setTypeFilter(option.value)}
-                className={[
-                  "h-10 shrink-0 rounded-full px-4 text-sm font-bold transition",
-                  active
-                    ? "bg-white text-black"
-                    : "border border-white/10 bg-white/5 text-white hover:bg-white/10",
-                ].join(" ")}
-              >
-                {option.label}
-              </button>
-            );
-          })}
-        </div>
+          return (
+            <button
+              key={option.value || "ALL"}
+              type="button"
+              onClick={() => setTypeFilter(option.value)}
+              className={[
+                "h-10 shrink-0 rounded-full px-4 text-sm font-bold transition",
+                active
+                  ? "bg-white text-black"
+                  : "border border-white/10 bg-white/5 text-white hover:bg-white/10",
+              ].join(" ")}
+            >
+              {option.label}
+            </button>
+          );
+        })}
       </section>
 
       {error && (

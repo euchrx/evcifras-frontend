@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import type { ReactNode } from "react";
@@ -50,10 +51,22 @@ type AudioPlayerContextValue = {
   isPlaying: boolean;
   isExpanded: boolean;
   requestToken: number;
+
+  duration: number;
+  currentTime: number;
+  volume: number;
+  progress: number;
+
   playTrack: (track: GlobalAudioTrack, queue?: GlobalAudioTrack[]) => void;
   playQueue: (queue: GlobalAudioTrack[], startTrack?: GlobalAudioTrack) => void;
+
   setIsPlaying: (value: boolean) => void;
   setIsExpanded: (value: boolean) => void;
+
+  seekToPercent: (value: number) => void;
+  skipSeconds: (seconds: number) => void;
+  setVolumeValue: (value: number) => void;
+
   playNext: () => void;
   playPrevious: () => void;
   closePlayer: () => void;
@@ -62,23 +75,70 @@ type AudioPlayerContextValue = {
 const AudioPlayerContext = createContext<AudioPlayerContextValue | null>(null);
 
 export function AudioPlayerProvider({ children }: { children: ReactNode }) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
   const [currentTrack, setCurrentTrack] = useState<GlobalAudioTrack | null>(
     null,
   );
   const [queue, setQueue] = useState<GlobalAudioTrack[]>([]);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPlaying, setIsPlayingState] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [requestToken, setRequestToken] = useState(0);
 
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [volume, setVolume] = useState(1);
+
+  const progress = useMemo(() => {
+    if (!duration) {
+      return 0;
+    }
+
+    return Math.min(100, Math.max(0, (currentTime / duration) * 100));
+  }, [currentTime, duration]);
+
+  const startAudio = useCallback(
+    async (track: GlobalAudioTrack) => {
+      const audio = audioRef.current;
+
+      if (!audio) {
+        return;
+      }
+
+      const currentSrc = audio.src;
+      const nextSrc = track.audioUrl;
+
+      if (!currentSrc || currentSrc !== nextSrc) {
+        audio.src = nextSrc;
+        audio.load();
+        setCurrentTime(0);
+      }
+
+      audio.volume = volume;
+
+      try {
+        await audio.play();
+        setIsPlayingState(true);
+      } catch {
+        setIsPlayingState(false);
+      }
+    },
+    [volume],
+  );
+
   const playTrack = useCallback(
     (track: GlobalAudioTrack, nextQueue?: GlobalAudioTrack[]) => {
-      setQueue(nextQueue && nextQueue.length > 0 ? nextQueue : [track]);
+      const effectiveQueue =
+        nextQueue && nextQueue.length > 0 ? nextQueue : [track];
+
+      setQueue(effectiveQueue);
       setCurrentTrack(track);
-      setIsPlaying(true);
       setIsExpanded(true);
       setRequestToken((current) => current + 1);
+
+      void startAudio(track);
     },
-    [],
+    [startAudio],
   );
 
   const playQueue = useCallback(
@@ -91,12 +151,33 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
 
       setQueue(nextQueue);
       setCurrentTrack(firstTrack);
-      setIsPlaying(true);
       setIsExpanded(true);
       setRequestToken((current) => current + 1);
+
+      void startAudio(firstTrack);
     },
-    [],
+    [startAudio],
   );
+
+  const setIsPlaying = useCallback((value: boolean) => {
+    const audio = audioRef.current;
+
+    if (!audio) {
+      setIsPlayingState(value);
+      return;
+    }
+
+    if (value) {
+      audio.play().then(
+        () => setIsPlayingState(true),
+        () => setIsPlayingState(false),
+      );
+      return;
+    }
+
+    audio.pause();
+    setIsPlayingState(false);
+  }, []);
 
   const playNext = useCallback(() => {
     if (!currentTrack || queue.length === 0) {
@@ -109,10 +190,13 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
         ? 0
         : currentIndex + 1;
 
-    setCurrentTrack(queue[nextIndex]);
-    setIsPlaying(true);
+    const nextTrack = queue[nextIndex];
+
+    setCurrentTrack(nextTrack);
     setRequestToken((current) => current + 1);
-  }, [currentTrack, queue]);
+
+    void startAudio(nextTrack);
+  }, [currentTrack, queue, startAudio]);
 
   const playPrevious = useCallback(() => {
     if (!currentTrack || queue.length === 0) {
@@ -123,16 +207,68 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     const previousIndex =
       currentIndex <= 0 ? queue.length - 1 : currentIndex - 1;
 
-    setCurrentTrack(queue[previousIndex]);
-    setIsPlaying(true);
+    const previousTrack = queue[previousIndex];
+
+    setCurrentTrack(previousTrack);
     setRequestToken((current) => current + 1);
-  }, [currentTrack, queue]);
+
+    void startAudio(previousTrack);
+  }, [currentTrack, queue, startAudio]);
+
+  const seekToPercent = useCallback(
+    (value: number) => {
+      const audio = audioRef.current;
+
+      if (!audio || !duration) {
+        return;
+      }
+
+      const nextTime = (value / 100) * duration;
+      audio.currentTime = nextTime;
+      setCurrentTime(nextTime);
+    },
+    [duration],
+  );
+
+  const skipSeconds = useCallback((seconds: number) => {
+    const audio = audioRef.current;
+
+    if (!audio) {
+      return;
+    }
+
+    audio.currentTime = Math.min(
+      Math.max(audio.currentTime + seconds, 0),
+      audio.duration || 0,
+    );
+  }, []);
+
+  const setVolumeValue = useCallback((value: number) => {
+    const audio = audioRef.current;
+    const nextVolume = Math.min(1, Math.max(0, value));
+
+    setVolume(nextVolume);
+
+    if (audio) {
+      audio.volume = nextVolume;
+    }
+  }, []);
 
   const closePlayer = useCallback(() => {
+    const audio = audioRef.current;
+
+    if (audio) {
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+    }
+
     setCurrentTrack(null);
-    setIsPlaying(false);
+    setIsPlayingState(false);
     setIsExpanded(false);
     setQueue([]);
+    setDuration(0);
+    setCurrentTime(0);
   }, []);
 
   const value = useMemo<AudioPlayerContextValue>(
@@ -142,10 +278,21 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       isPlaying,
       isExpanded,
       requestToken,
+
+      duration,
+      currentTime,
+      volume,
+      progress,
+
       playTrack,
       playQueue,
       setIsPlaying,
       setIsExpanded,
+
+      seekToPercent,
+      skipSeconds,
+      setVolumeValue,
+
       playNext,
       playPrevious,
       closePlayer,
@@ -156,8 +303,16 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
       isPlaying,
       isExpanded,
       requestToken,
+      duration,
+      currentTime,
+      volume,
+      progress,
       playTrack,
       playQueue,
+      setIsPlaying,
+      seekToPercent,
+      skipSeconds,
+      setVolumeValue,
       playNext,
       playPrevious,
       closePlayer,
@@ -167,6 +322,30 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   return (
     <AudioPlayerContext.Provider value={value}>
       {children}
+
+      <audio
+        ref={audioRef}
+        preload="metadata"
+        playsInline
+        className="hidden"
+        onLoadedMetadata={(event) => {
+          const audio = event.currentTarget;
+          setDuration(audio.duration || currentTrack?.durationSec || 0);
+          audio.volume = volume;
+        }}
+        onTimeUpdate={(event) => {
+          setCurrentTime(event.currentTarget.currentTime);
+        }}
+        onPlay={() => setIsPlayingState(true)}
+        onPause={() => setIsPlayingState(false)}
+        onEnded={() => {
+          if (queue.length > 1) {
+            playNext();
+          } else {
+            setIsPlayingState(false);
+          }
+        }}
+      />
     </AudioPlayerContext.Provider>
   );
 }

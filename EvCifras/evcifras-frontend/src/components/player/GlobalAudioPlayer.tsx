@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -14,7 +14,7 @@ import {
   Volume2,
   X,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useAudioPlayer } from "../../contexts/AudioPlayerContext";
 
 const typeLabels: Record<string, string> = {
@@ -46,75 +46,36 @@ function getSongUrl(trackId: string, artistSlug?: string, songSlug?: string) {
 }
 
 export function GlobalAudioPlayer() {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const location = useLocation();
+
   const {
     currentTrack,
     queue,
     isPlaying,
     isExpanded,
-    requestToken,
+    duration,
+    currentTime,
+    volume,
+    progress,
     setIsPlaying,
     setIsExpanded,
+    seekToPercent,
+    skipSeconds,
+    setVolumeValue,
     playNext,
     playPrevious,
     closePlayer,
   } = useAudioPlayer();
 
-  const [duration, setDuration] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [volume, setVolume] = useState(1);
   const [showQueue, setShowQueue] = useState(false);
 
-  const progress = useMemo(() => {
-    if (!duration) {
-      return 0;
-    }
-
-    return Math.min(100, Math.max(0, (currentTime / duration) * 100));
-  }, [currentTime, duration]);
+  const hideVisualPlayer = /^\/ouvir\/[^/]+/.test(location.pathname);
 
   const artistName = currentTrack?.song?.artist?.name || "Artista";
   const songTitle = currentTrack?.song?.title || currentTrack?.title || "Áudio";
   const imageUrl = currentTrack?.song?.artist?.imageUrl;
   const artistSlug = currentTrack?.song?.artist?.slug;
   const songSlug = currentTrack?.song?.slug;
-
-  useEffect(() => {
-    const audio = audioRef.current;
-
-    if (!audio || !currentTrack) {
-      return;
-    }
-
-    audio.src = currentTrack.audioUrl;
-    audio.load();
-    audio.volume = volume;
-    setCurrentTime(0);
-
-    if (isPlaying) {
-      audio.play().catch(() => {
-        setIsPlaying(false);
-      });
-    }
-  }, [currentTrack?.id, requestToken]);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-
-    if (!audio || !currentTrack) {
-      return;
-    }
-
-    if (isPlaying && audio.paused) {
-      audio.play().catch(() => {
-        setIsPlaying(false);
-      });
-    }
-
-    if (!isPlaying && !audio.paused) {
-      audio.pause();
-    }
-  }, [isPlaying, currentTrack]);
 
   useEffect(() => {
     if (!currentTrack || !("mediaSession" in navigator)) {
@@ -153,11 +114,11 @@ export function GlobalAudioPlayer() {
     });
 
     navigator.mediaSession.setActionHandler("seekbackward", () => {
-      handleSkip(-10);
+      skipSeconds(-10);
     });
 
     navigator.mediaSession.setActionHandler("seekforward", () => {
-      handleSkip(10);
+      skipSeconds(10);
     });
 
     return () => {
@@ -168,81 +129,30 @@ export function GlobalAudioPlayer() {
       navigator.mediaSession.setActionHandler("seekbackward", null);
       navigator.mediaSession.setActionHandler("seekforward", null);
     };
-  }, [currentTrack, songTitle, artistName, imageUrl, playNext, playPrevious]);
+  }, [
+    currentTrack,
+    songTitle,
+    artistName,
+    imageUrl,
+    setIsPlaying,
+    playNext,
+    playPrevious,
+    skipSeconds,
+  ]);
 
-  function handleSeek(value: string) {
-    const audio = audioRef.current;
-
-    if (!audio || !duration) {
-      return;
-    }
-
-    const nextPercent = Number(value);
-    const nextTime = (nextPercent / 100) * duration;
-
-    audio.currentTime = nextTime;
-    setCurrentTime(nextTime);
-  }
-
-  function handleSkip(seconds: number) {
-    const audio = audioRef.current;
-
-    if (!audio) {
-      return;
-    }
-
-    audio.currentTime = Math.min(
-      Math.max(audio.currentTime + seconds, 0),
-      audio.duration || 0,
-    );
-  }
-
-  function handleVolume(value: string) {
-    const audio = audioRef.current;
-    const nextVolume = Number(value) / 100;
-
-    setVolume(nextVolume);
-
-    if (audio) {
-      audio.volume = nextVolume;
-    }
-  }
-
-  if (!currentTrack) {
+  if (!currentTrack || hideVisualPlayer) {
     return null;
   }
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-[#070A12]/95 text-white shadow-2xl shadow-black/50 backdrop-blur-xl print:hidden">
-      <audio
-        ref={audioRef}
-        preload="metadata"
-        onLoadedMetadata={(event) => {
-          const audio = event.currentTarget;
-          setDuration(audio.duration || currentTrack.durationSec || 0);
-          audio.volume = volume;
-        }}
-        onTimeUpdate={(event) => {
-          setCurrentTime(event.currentTarget.currentTime);
-        }}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        onEnded={() => {
-          if (queue.length > 1) {
-            playNext();
-          } else {
-            setIsPlaying(false);
-          }
-        }}
-      />
-
       <div className="mx-auto max-w-7xl px-3 py-2 md:px-6">
         <input
           type="range"
           min="0"
           max="100"
           value={progress}
-          onChange={(event) => handleSeek(event.target.value)}
+          onChange={(event) => seekToPercent(Number(event.target.value))}
           className="mb-2 w-full accent-violet-500"
           aria-label="Progresso do áudio"
         />
@@ -267,7 +177,7 @@ export function GlobalAudioPlayer() {
               {songTitle}
             </p>
             <p className="truncate text-xs font-semibold text-violet-200">
-              {artistName} • {currentTrack.title}
+              {artistName}
             </p>
 
             <div className="mt-1 hidden items-center gap-2 text-xs text-slate-500 sm:flex">
@@ -292,7 +202,7 @@ export function GlobalAudioPlayer() {
 
             <button
               type="button"
-              onClick={() => handleSkip(-10)}
+              onClick={() => skipSeconds(-10)}
               className="hidden h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 md:flex"
               title="Voltar 10s"
             >
@@ -314,7 +224,7 @@ export function GlobalAudioPlayer() {
 
             <button
               type="button"
-              onClick={() => handleSkip(10)}
+              onClick={() => skipSeconds(10)}
               className="hidden h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 md:flex"
               title="Avançar 10s"
             >
@@ -339,7 +249,9 @@ export function GlobalAudioPlayer() {
               min="0"
               max="100"
               value={Math.round(volume * 100)}
-              onChange={(event) => handleVolume(event.target.value)}
+              onChange={(event) =>
+                setVolumeValue(Number(event.target.value) / 100)
+              }
               className="w-full accent-violet-500"
               aria-label="Volume"
             />
@@ -430,7 +342,9 @@ export function GlobalAudioPlayer() {
                 min="0"
                 max="100"
                 value={Math.round(volume * 100)}
-                onChange={(event) => handleVolume(event.target.value)}
+                onChange={(event) =>
+                  setVolumeValue(Number(event.target.value) / 100)
+                }
                 className="w-full accent-violet-500"
                 aria-label="Volume"
               />
@@ -462,7 +376,7 @@ export function GlobalAudioPlayer() {
                       {index + 1}. {track.song?.title || track.title}
                     </p>
                     <p className="truncate text-xs text-slate-500">
-                      {track.song?.artist?.name || "Artista"} • {track.title}
+                      {track.song?.artist?.name || "Artista"}
                     </p>
                   </div>
                 );

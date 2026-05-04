@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import { Headphones, Pause, Play } from "lucide-react";
 import {
   useAudioPlayer,
@@ -13,33 +11,18 @@ type PlayAudioTrackButtonProps = {
   className?: string;
 };
 
-function isIOSDevice() {
-  if (typeof navigator === "undefined") {
-    return false;
-  }
-
-  return /iPad|iPhone|iPod/.test(navigator.userAgent);
-}
-
 export function PlayAudioTrackButton({
   track,
   queue,
   label = "Tocar",
   className,
 }: PlayAudioTrackButtonProps) {
-  const navigate = useNavigate();
   const { currentTrack, isPlaying, playTrack, setIsPlaying } = useAudioPlayer();
 
-  const isIOS = useMemo(() => isIOSDevice(), []);
   const isCurrent = currentTrack?.id === track.id;
   const isCurrentPlaying = isCurrent && isPlaying;
 
   function handleClick() {
-    if (isIOS && !isCurrent) {
-      navigate(`/ouvir/${track.id}`);
-      return;
-    }
-
     if (isCurrent) {
       setIsPlaying(!isPlaying);
       return;
@@ -65,11 +48,7 @@ export function PlayAudioTrackButton({
         <Headphones className="h-4 w-4" />
       )}
 
-      {isIOS && !isCurrent
-        ? "Abrir player"
-        : isCurrentPlaying
-          ? "Pausar"
-          : label}
+      {isCurrentPlaying ? "Pausar" : label}
     </button>
   );
 }

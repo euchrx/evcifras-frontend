@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import {
   Archive,
+  CheckCircle2,
   Edit3,
   FileAudio,
   Headphones,
@@ -13,6 +14,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { api } from "../services/api";
 
 type Song = {
@@ -76,7 +78,7 @@ type AudioTrackFormState = {
 type ApiError = {
   response?: {
     data?: {
-      message?: string;
+      message?: string | string[];
     };
   };
 };
@@ -109,7 +111,13 @@ const statusLabels: Record<AudioTrackStatus, string> = {
 
 function getApiErrorMessage(error: unknown, fallback: string) {
   const apiError = error as ApiError;
-  return apiError.response?.data?.message || fallback;
+  const message = apiError.response?.data?.message;
+
+  if (Array.isArray(message)) {
+    return message.join(" ");
+  }
+
+  return message || fallback;
 }
 
 function formatDuration(seconds?: number | null) {
@@ -181,7 +189,6 @@ export function AdminAudioTracksPage() {
         !normalizedSearch ||
         track.title.toLowerCase().includes(normalizedSearch) ||
         track.description?.toLowerCase().includes(normalizedSearch) ||
-        track.audioUrl.toLowerCase().includes(normalizedSearch) ||
         songTitle.toLowerCase().includes(normalizedSearch) ||
         artistName.toLowerCase().includes(normalizedSearch);
 
@@ -351,7 +358,7 @@ export function AdminAudioTracksPage() {
         title: current.title || file.name.replace(/\.[^/.]+$/, ""),
       }));
 
-      setFeedback("Upload enviado para o Cloudflare R2. Agora salve o áudio.");
+      setFeedback("Upload concluído. Agora preencha os dados e salve o áudio.");
     } catch (err) {
       const message =
         err instanceof Error
@@ -373,7 +380,7 @@ export function AdminAudioTracksPage() {
     }
 
     if (!form.audioUrl.trim()) {
-      setFeedback("Informe a URL do áudio ou faça upload de um arquivo.");
+      setFeedback("Faça upload de um arquivo de áudio antes de salvar.");
       return;
     }
 
@@ -530,8 +537,9 @@ export function AdminAudioTracksPage() {
             className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 text-sm font-bold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <RefreshCw
-              className={`h-4 w-4 ${loading || songsLoading ? "animate-spin" : ""
-                }`}
+              className={`h-4 w-4 ${
+                loading || songsLoading ? "animate-spin" : ""
+              }`}
             />
             Atualizar
           </button>
@@ -548,39 +556,51 @@ export function AdminAudioTracksPage() {
               {editingTrack ? editingTrack.title : "Cadastrar áudio"}
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              Você pode enviar um arquivo de áudio ou informar uma URL externa.
+              Envie o arquivo e vincule o áudio a uma cifra publicada.
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <div>
               <label className="text-sm font-semibold text-slate-300">
-                Upload de áudio
+                Upload de áudio *
               </label>
 
               <label className="mt-2 flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-violet-400/30 bg-violet-500/10 px-4 py-6 text-center transition hover:bg-violet-500/15">
                 {uploading ? (
                   <Loader2 className="h-7 w-7 animate-spin text-violet-200" />
+                ) : form.audioUrl ? (
+                  <CheckCircle2 className="h-7 w-7 text-emerald-300" />
                 ) : (
                   <Upload className="h-7 w-7 text-violet-200" />
                 )}
 
                 <span className="mt-3 text-sm font-bold text-white">
-                  {uploading ? "Enviando..." : "Clique para enviar MP3/M4A/WAV"}
+                  {uploading
+                    ? "Enviando..."
+                    : form.audioUrl
+                      ? "Arquivo enviado"
+                      : "Clique para enviar"}
                 </span>
 
                 <span className="mt-1 text-xs text-slate-400">
-                  Máximo 50 MB. Formatos: MP3, WAV, M4A, AAC, OGG ou WEBM.
+                  Máximo 30 MB. Formatos: MP3, WAV, M4A ou AAC.
                 </span>
 
                 <input
                   type="file"
-                  accept="audio/*"
+                  accept="audio/mpeg,audio/mp3,audio/mp4,audio/aac,audio/x-m4a,audio/wav,audio/x-wav,.mp3,.m4a,.aac,.wav"
                   disabled={uploading}
                   onChange={handleUploadAudio}
                   className="hidden"
                 />
               </label>
+
+              {form.audioUrl && (
+                <div className="mt-3 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100">
+                  Áudio pronto para salvar.
+                </div>
+              )}
             </div>
 
             <div>
@@ -618,22 +638,6 @@ export function AdminAudioTracksPage() {
                   Nenhuma cifra publicada encontrada. Publique uma cifra antes
                   de cadastrar áudio.
                 </p>
-              )}
-            </div>
-
-            <div>
-              <label className="text-sm font-semibold text-slate-300">
-                URL do áudio *
-              </label>
-              <input
-                value={form.audioUrl}
-                onChange={(event) => updateForm("audioUrl", event.target.value)}
-                placeholder="https://.../audio.mp3"
-                className="mt-2 h-12 w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-violet-400/50 focus:bg-black/30"
-              />
-
-              {form.audioUrl && (
-                <audio controls src={form.audioUrl} className="mt-3 w-full" />
               )}
             </div>
 
@@ -885,21 +889,17 @@ export function AdminAudioTracksPage() {
                               /ouvir. Clique em Publicar para liberar.
                             </div>
                           )}
-
-                          <p className="mt-3 truncate text-xs text-slate-500">
-                            {track.audioUrl}
-                          </p>
                         </div>
 
                         <div className="flex flex-wrap gap-2">
                           {isPublished && (
-                            <a
-                              href={getListenUrl(track)}
+                            <Link
+                              to={getListenUrl(track)}
                               className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-white transition hover:bg-white/10"
                             >
                               <Headphones className="h-4 w-4" />
                               Ouvir
-                            </a>
+                            </Link>
                           )}
 
                           <button

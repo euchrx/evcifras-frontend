@@ -29,7 +29,7 @@ const typeLabels: Record<string, string> = {
   GUIDE: "Guia",
   LESSON: "Aula",
   DEMO: "Demo",
-  OTHER: "Outro",
+  OTHER: "Áudio",
 };
 
 function getApiErrorMessage(error: unknown, fallback: string) {
@@ -46,6 +46,31 @@ function formatDuration(seconds?: number | null) {
   const remainingSeconds = seconds % 60;
 
   return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+}
+
+function getTrackDisplayTitle(track: GlobalAudioTrack) {
+  const typeLabel = typeLabels[track.type] || "Áudio";
+
+  if (track.song?.title) {
+    return typeLabel;
+  }
+
+  return typeLabel;
+}
+
+function getTrackSubtitle(track: GlobalAudioTrack) {
+  const artistName = track.song?.artist?.name;
+  const songTitle = track.song?.title;
+
+  if (artistName && songTitle) {
+    return `${artistName} • ${songTitle}`;
+  }
+
+  if (songTitle) {
+    return songTitle;
+  }
+
+  return "Faixa disponível";
 }
 
 export function SongAudioTracksSection({ songId }: SongAudioTracksSectionProps) {
@@ -147,14 +172,14 @@ export function SongAudioTracksSection({ songId }: SongAudioTracksSectionProps) 
 
               <div className="min-w-0 flex-1">
                 <h3 className="truncate text-sm font-black text-white">
-                  {track.title}
+                  {getTrackDisplayTitle(track)}
                 </h3>
 
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
-                    {typeLabels[track.type]}
-                  </span>
+                <p className="mt-1 truncate text-xs font-semibold text-violet-200">
+                  {getTrackSubtitle(track)}
+                </p>
 
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                   <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
                     <Clock3 className="h-3.5 w-3.5" />
                     {formatDuration(track.durationSec)}

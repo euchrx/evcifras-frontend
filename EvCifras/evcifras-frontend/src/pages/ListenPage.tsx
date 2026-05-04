@@ -10,7 +10,10 @@ import {
 } from "lucide-react";
 import { api } from "../services/api";
 import PlayAudioTrackButton from "../components/audio/PlayAudioTrackButton";
-import type { GlobalAudioTrack } from "../contexts/AudioPlayerContext";
+import {
+  useAudioPlayer,
+  type GlobalAudioTrack,
+} from "../contexts/AudioPlayerContext";
 
 type AudioTrackType =
   | "ORIGINAL"
@@ -99,17 +102,6 @@ function getTrackCover(track: AudioTrack) {
 
 function getTrackType(track: AudioTrack) {
   return typeLabels[track.type] || "Áudio";
-}
-
-function getTrackSubtitle(track: AudioTrack) {
-  const typeLabel = getTrackType(track);
-  const genre = track.song?.genre;
-
-  if (genre) {
-    return `${typeLabel} • ${genre}`;
-  }
-
-  return typeLabel;
 }
 
 function getAlbumGroups(tracks: AudioTrack[]) {
@@ -348,44 +340,64 @@ function SectionTitle({ title }: { title: string }) {
 }
 
 function AlbumTouchCard({ album }: { album: AlbumGroup }) {
+  const { playTrack } = useAudioPlayer();
   const firstTrack = album.tracks[0];
 
+  function handlePlayAlbum() {
+    if (!firstTrack) {
+      return;
+    }
+
+    playTrack(firstTrack, album.tracks);
+  }
+
   return (
-    <article className="group w-[138px] shrink-0 snap-start sm:w-[160px] md:w-[190px] lg:w-[210px]">
-      <button
-        type="button"
-        className="block w-full text-left"
-        aria-label={`Tocar ${album.title}`}
-      >
-        <div className="relative aspect-square overflow-hidden rounded-[1.7rem] shadow-2xl shadow-black/30 transition duration-300 group-hover:scale-[1.03]">
-          {album.coverUrl ? (
-            <img
-              src={album.coverUrl}
-              alt={album.title}
-              className="h-full w-full object-cover"
+    <article
+      role="button"
+      tabIndex={0}
+      onClick={handlePlayAlbum}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          handlePlayAlbum();
+        }
+      }}
+      className="group w-[138px] shrink-0 snap-start cursor-pointer outline-none sm:w-[160px] md:w-[190px] lg:w-[210px]"
+      aria-label={`Tocar ${album.title}`}
+    >
+      <div className="relative aspect-square overflow-hidden rounded-[1.7rem] shadow-2xl shadow-black/30 transition duration-300 group-hover:scale-[1.03] group-active:scale-[0.98]">
+        {album.coverUrl ? (
+          <img
+            src={album.coverUrl}
+            alt={album.title}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-500/25 via-fuchsia-500/10 to-blue-500/10 text-violet-200">
+            <Disc3 className="h-14 w-14" />
+          </div>
+        )}
+
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
+
+        {firstTrack && (
+          <div
+            className="absolute bottom-3 right-3 flex h-12 w-12 items-center justify-center rounded-full bg-white text-black shadow-xl shadow-black/40 transition group-hover:scale-105"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <PlayAudioTrackButton
+              track={firstTrack}
+              queue={album.tracks}
+              label=""
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-black"
             />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-500/25 via-fuchsia-500/10 to-blue-500/10 text-violet-200">
-              <Disc3 className="h-14 w-14" />
-            </div>
-          )}
+          </div>
+        )}
+      </div>
 
-          {firstTrack && (
-            <div className="absolute inset-0 flex items-end justify-end bg-gradient-to-t from-black/50 via-transparent to-transparent p-3 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
-              <PlayAudioTrackButton
-                track={firstTrack}
-                queue={album.tracks}
-                label=""
-                className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-black shadow-xl shadow-black/40 transition hover:scale-105"
-              />
-            </div>
-          )}
-        </div>
-
-        <p className="mt-3 line-clamp-2 text-sm font-black leading-5 text-white">
-          {album.title}
-        </p>
-      </button>
+      <p className="mt-3 line-clamp-2 text-sm font-black leading-5 text-white">
+        {album.title}
+      </p>
     </article>
   );
 }
@@ -433,7 +445,7 @@ function FloatingTrackRow({
           {getTrackTitle(track)}
         </p>
         <p className="mt-1 truncate text-xs font-semibold text-slate-400">
-          {getTrackArtist(track)} • {getTrackSubtitle(track)}
+          {getTrackArtist(track)}
         </p>
       </div>
 
@@ -551,7 +563,6 @@ function JukeboxRow({
           </p>
           <p className="mt-1 truncate text-xs font-semibold text-slate-400">
             {getTrackArtist(track)}
-            {track.song?.genre ? ` • ${track.song.genre}` : ""}
           </p>
         </div>
       </div>

@@ -7,9 +7,10 @@ import {
   FileAudio,
   Loader2,
   Music2,
+  Pause,
+  Play,
 } from "lucide-react";
 import { api } from "../services/api";
-import PlayAudioTrackButton from "../components/audio/PlayAudioTrackButton";
 import {
   useAudioPlayer,
   type GlobalAudioTrack,
@@ -108,18 +109,14 @@ function formatPlays(value: number) {
   return String(value);
 }
 
-function getTrackPlayCount(track: AudioTrack, index: number) {
-  const possiblePlayCount =
+function getTrackPlayCount(track: AudioTrack) {
+  return (
     track.playCount ??
     track.playsCount ??
     track.listenCount ??
-    track.totalPlays;
-
-  if (typeof possiblePlayCount === "number") {
-    return possiblePlayCount;
-  }
-
-  return 11_000_000 + index * 320_000;
+    track.totalPlays ??
+    0
+  );
 }
 
 function getTrackTitle(track: AudioTrack) {
@@ -161,6 +158,13 @@ function getAlbumGroups(tracks: AudioTrack[]) {
 
 export function ListenPage() {
   const [searchParams] = useSearchParams();
+
+  const {
+    currentTrack,
+    isPlaying,
+    playTrack,
+    setIsPlaying,
+  } = useAudioPlayer();
 
   const [tracks, setTracks] = useState<AudioTrack[]>([]);
   const [search, setSearch] = useState(() => searchParams.get("q") || "");
@@ -212,6 +216,64 @@ export function ListenPage() {
       .filter((track) => track.type === "PLAYBACK")
       .slice(0, 8);
   }, [filteredTracks]);
+
+  function updateTrackPlayCount(trackId: string, playCount: number) {
+    setTracks((current) =>
+      current.map((track) =>
+        track.id === trackId
+          ? {
+              ...track,
+              playCount,
+            }
+          : track,
+      ),
+    );
+  }
+
+  async function registerStream(trackId: string) {
+    try {
+      const response = await api.post<
+        | {
+            id?: string;
+            playCount?: number;
+            playsCount?: number;
+            listenCount?: number;
+            totalPlays?: number;
+          }
+        | AudioTrack
+      >(`/audio-tracks/${trackId}/stream`);
+
+      const data = response.data;
+
+      const nextPlayCount =
+        data.playCount ??
+        data.playsCount ??
+        data.listenCount ??
+        data.totalPlays;
+
+      if (typeof nextPlayCount === "number") {
+        updateTrackPlayCount(trackId, nextPlayCount);
+        return;
+      }
+
+      const current = tracks.find((track) => track.id === trackId);
+      updateTrackPlayCount(trackId, getTrackPlayCount(current as AudioTrack) + 1);
+    } catch {
+      // Se falhar, não incrementa localmente para não criar contagem falsa.
+    }
+  }
+
+  function handlePlayTrack(track: AudioTrack, queue: AudioTrack[]) {
+    const isCurrent = currentTrack?.id === track.id;
+
+    if (isCurrent) {
+      setIsPlaying(!isPlaying);
+      return;
+    }
+
+    playTrack(track, queue);
+    void registerStream(track.id);
+  }
 
   async function loadTracks() {
     try {
@@ -292,7 +354,11 @@ export function ListenPage() {
 
               <div className="mt-5 flex snap-x gap-4 overflow-x-auto pb-4">
                 {albumGroups.map((album) => (
-                  <AlbumTouchCard key={album.id} album={album} />
+                  <AlbumTouchCard
+                    key={album.id}
+                    album={album}
+                    onPlayTrack={handlePlayTrack}
+                  />
                 ))}
               </div>
             </section>
@@ -309,6 +375,9 @@ export function ListenPage() {
                     track={track}
                     index={index}
                     queue={filteredTracks}
+                    currentTrackId={currentTrack?.id}
+                    isPlaying={isPlaying}
+                    onPlayTrack={handlePlayTrack}
                   />
                 ))}
               </div>
@@ -320,6 +389,9 @@ export function ListenPage() {
               title="Playbacks"
               tracks={playbackTracks}
               queue={filteredTracks}
+              currentTrackId={currentTrack?.id}
+              isPlaying={isPlaying}
+              onPlayTrack={handlePlayTrack}
             />
           )}
 
@@ -328,6 +400,9 @@ export function ListenPage() {
               title="Guias"
               tracks={guideTracks}
               queue={filteredTracks}
+              currentTrackId={currentTrack?.id}
+              isPlaying={isPlaying}
+              onPlayTrack={handlePlayTrack}
             />
           )}
 
@@ -350,6 +425,9 @@ export function ListenPage() {
                     track={track}
                     index={index}
                     queue={filteredTracks}
+                    currentTrackId={currentTrack?.id}
+                    isPlaying={isPlaying}
+                    onPlayTrack={handlePlayTrack}
                   />
                 ))}
               </div>
@@ -367,27 +445,52 @@ function SectionTitle({ title }: { title: string }) {
   );
 }
 
-function AlbumTouchCard({ album }: { album: AlbumGroup }) {
-  const { playTrack } = useAudioPlayer();
+function PlayStateIcon({
+  active,
+  playing,
+  className,
+}: {
+  active: boolean;
+  playing: boolean;
+  className: string;
+}) {
+  return (
+    <span className={className}>
+      {active && playing ? (
+        <Pause className="h-4 w-4 fill-current" />
+      ) : (
+        <Play className="ml-0.5 h-4 w-4 fill-current" />
+      )}
+    </span>
+  );
+}
+
+function AlbumTouchCard({
+  album,
+  onPlayTrack,
+}: {
+  album: AlbumGroup;
+  onPlayTrack: (track: AudioTrack, queue: AudioTrack[]) => void;
+}) {
   const firstTrack = album.tracks[0];
 
-  function handlePlayAlbum() {
+  function handleClick() {
     if (!firstTrack) {
       return;
     }
 
-    playTrack(firstTrack, album.tracks);
+    onPlayTrack(firstTrack, album.tracks);
   }
 
   return (
     <article
       role="button"
       tabIndex={0}
-      onClick={handlePlayAlbum}
+      onClick={handleClick}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          handlePlayAlbum();
+          handleClick();
         }
       }}
       className="group w-[138px] shrink-0 snap-start cursor-pointer outline-none sm:w-[160px] md:w-[190px] lg:w-[210px]"
@@ -409,16 +512,8 @@ function AlbumTouchCard({ album }: { album: AlbumGroup }) {
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
 
         {firstTrack && (
-          <div
-            className="absolute bottom-3 right-3 flex h-12 w-12 items-center justify-center rounded-full bg-white text-black shadow-xl shadow-black/40 transition group-hover:scale-105"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <PlayAudioTrackButton
-              track={firstTrack}
-              queue={album.tracks}
-              label=""
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-black"
-            />
+          <div className="absolute bottom-3 right-3 flex h-12 w-12 items-center justify-center rounded-full bg-white text-black shadow-xl shadow-black/40 transition group-hover:scale-105">
+            <Play className="ml-0.5 h-5 w-5 fill-current" />
           </div>
         )}
       </div>
@@ -434,23 +529,40 @@ function FloatingTrackRow({
   track,
   index,
   queue,
+  currentTrackId,
+  isPlaying,
+  onPlayTrack,
 }: {
   track: AudioTrack;
   index: number;
   queue: AudioTrack[];
+  currentTrackId?: string;
+  isPlaying: boolean;
+  onPlayTrack: (track: AudioTrack, queue: AudioTrack[]) => void;
 }) {
   const cover = getTrackCover(track);
+  const isCurrent = currentTrackId === track.id;
 
   return (
-    <article className="group flex items-center gap-3 rounded-[1.5rem] border border-transparent bg-white/[0.035] p-3 backdrop-blur transition hover:border-white/10 hover:bg-white/[0.075]">
+    <article
+      role="button"
+      tabIndex={0}
+      onClick={() => onPlayTrack(track, queue)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onPlayTrack(track, queue);
+        }
+      }}
+      className="group flex cursor-pointer items-center gap-3 rounded-[1.5rem] border border-transparent bg-white/[0.035] p-3 outline-none backdrop-blur transition hover:border-white/10 hover:bg-white/[0.075] active:scale-[0.99]"
+    >
       <div className="flex h-9 w-9 shrink-0 items-center justify-center text-sm font-black text-slate-500 group-hover:hidden">
         {index + 1}
       </div>
 
-      <PlayAudioTrackButton
-        track={track}
-        queue={queue}
-        label=""
+      <PlayStateIcon
+        active={isCurrent}
+        playing={isPlaying}
         className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-black transition hover:scale-105 group-hover:flex"
       />
 
@@ -488,10 +600,16 @@ function TrackCarousel({
   title,
   tracks,
   queue,
+  currentTrackId,
+  isPlaying,
+  onPlayTrack,
 }: {
   title: string;
   tracks: AudioTrack[];
   queue: AudioTrack[];
+  currentTrackId?: string;
+  isPlaying: boolean;
+  onPlayTrack: (track: AudioTrack, queue: AudioTrack[]) => void;
 }) {
   return (
     <section>
@@ -500,11 +618,21 @@ function TrackCarousel({
       <div className="mt-5 flex gap-4 overflow-x-auto pb-3">
         {tracks.map((track) => {
           const cover = getTrackCover(track);
+          const isCurrent = currentTrackId === track.id;
 
           return (
             <article
               key={track.id}
-              className="group w-44 shrink-0 rounded-[1.75rem] border border-transparent bg-white/[0.035] p-3 transition hover:border-white/10 hover:bg-white/[0.075]"
+              role="button"
+              tabIndex={0}
+              onClick={() => onPlayTrack(track, queue)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onPlayTrack(track, queue);
+                }
+              }}
+              className="group w-44 shrink-0 cursor-pointer rounded-[1.75rem] border border-transparent bg-white/[0.035] p-3 outline-none transition hover:border-white/10 hover:bg-white/[0.075] active:scale-[0.99]"
             >
               <div className="relative aspect-square overflow-hidden rounded-[1.4rem] bg-white/10">
                 {cover ? (
@@ -519,14 +647,11 @@ function TrackCarousel({
                   </div>
                 )}
 
-                <div className="absolute bottom-3 right-3 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
-                  <PlayAudioTrackButton
-                    track={track}
-                    queue={queue}
-                    label=""
-                    className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-black shadow-xl shadow-black/40 transition hover:scale-105"
-                  />
-                </div>
+                <PlayStateIcon
+                  active={isCurrent}
+                  playing={isPlaying}
+                  className="absolute bottom-3 right-3 flex h-11 w-11 items-center justify-center rounded-full bg-white text-black shadow-xl shadow-black/40 transition hover:scale-105 md:opacity-0 md:group-hover:opacity-100"
+                />
               </div>
 
               <h3 className="mt-3 line-clamp-2 text-sm font-black text-white">
@@ -548,25 +673,42 @@ function JukeboxRow({
   track,
   index,
   queue,
+  currentTrackId,
+  isPlaying,
+  onPlayTrack,
 }: {
   track: AudioTrack;
   index: number;
   queue: AudioTrack[];
+  currentTrackId?: string;
+  isPlaying: boolean;
+  onPlayTrack: (track: AudioTrack, queue: AudioTrack[]) => void;
 }) {
   const cover = getTrackCover(track);
-  const plays = formatPlays(getTrackPlayCount(track, index));
+  const plays = formatPlays(getTrackPlayCount(track));
+  const isCurrent = currentTrackId === track.id;
 
   return (
-    <div className="group grid grid-cols-[48px_1fr_72px] items-center gap-3 px-4 py-3 transition hover:bg-white/[0.06] md:grid-cols-[56px_1fr_80px]">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onPlayTrack(track, queue)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onPlayTrack(track, queue);
+        }
+      }}
+      className="group grid cursor-pointer grid-cols-[48px_1fr_72px] items-center gap-3 px-4 py-3 outline-none transition hover:bg-white/[0.06] active:bg-white/[0.08] md:grid-cols-[56px_1fr_80px]"
+    >
       <div className="flex items-center justify-center">
         <span className="text-sm font-bold text-slate-500 group-hover:hidden">
           {index + 1}
         </span>
 
-        <PlayAudioTrackButton
-          track={track}
-          queue={queue}
-          label=""
+        <PlayStateIcon
+          active={isCurrent}
+          playing={isPlaying}
           className="hidden h-9 w-9 items-center justify-center rounded-full bg-white text-black transition hover:scale-105 group-hover:flex"
         />
       </div>

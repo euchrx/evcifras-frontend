@@ -3,7 +3,6 @@ import type { ReactElement } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   BookOpen,
-  Guitar,
   Headphones,
   Heart,
   Home,
@@ -153,15 +152,12 @@ export function AppLayout() {
             className="group flex shrink-0 items-center gap-3"
             onClick={() => setMobileOpen(false)}
           >
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-500 text-white shadow-lg shadow-violet-950/40 transition group-hover:bg-violet-400">
-              <Guitar className="h-5 w-5" />
-            </div>
 
             <div className="hidden min-w-0 md:block">
               <img
                 src="/logo.png"
                 alt="EvCifras"
-                className="h-12 w-auto object-contain"
+                className="h-18 w-auto object-contain"
               />
             </div>
           </Link>

@@ -1,12 +1,6 @@
 import { useState } from "react";
 import type { ReactElement } from "react";
-import {
-  Link,
-  NavLink,
-  Outlet,
-  useLocation,
-  useNavigate,
-} from "react-router-dom";
+import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   BookOpen,
   Guitar,
@@ -76,11 +70,8 @@ export function EmptyState({
 
 export function AppLayout() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { user, isAuthenticated, isEditor, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  const hideGlobalPlayer = /^\/ouvir\/[^/]+/.test(location.pathname);
 
   const navItems: NavItem[] = [
     {
@@ -323,7 +314,7 @@ export function AppLayout() {
         </div>
       </footer>
 
-      {!hideGlobalPlayer && <GlobalAudioPlayer />}
+      <GlobalAudioPlayer />
     </div>
   );
 }

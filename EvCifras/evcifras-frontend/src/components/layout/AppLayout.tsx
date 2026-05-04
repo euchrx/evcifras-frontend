@@ -158,12 +158,11 @@ export function AppLayout() {
             </div>
 
             <div className="hidden min-w-0 md:block">
-              <p className="truncate text-lg font-black leading-none tracking-tight">
-                EvCifras
-              </p>
-              <p className="mt-1 truncate text-xs font-medium text-slate-500">
-                cifras, música e repertórios
-              </p>
+              <img
+                src="/logo.png"
+                alt="EvCifras"
+                className="h-12 w-auto object-contain"
+              />
             </div>
           </Link>
 

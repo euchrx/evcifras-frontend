@@ -5,14 +5,9 @@ import {
   Clock3,
   Disc3,
   FileAudio,
-  Headphones,
-  Library,
   Loader2,
   Music2,
-  PlayCircle,
-  Radio,
   Search,
-  Sparkles,
 } from "lucide-react";
 import { api } from "../services/api";
 import PlayAudioTrackButton from "../components/audio/PlayAudioTrackButton";
@@ -41,7 +36,6 @@ type ApiError = {
 type AlbumGroup = {
   id: string;
   title: string;
-  subtitle: string;
   coverUrl: string;
   tracks: AudioTrack[];
 };
@@ -123,9 +117,8 @@ function getAlbumGroups(tracks: AudioTrack[]) {
   const map = new Map<string, AlbumGroup>();
 
   tracks.forEach((track) => {
-    const artist = getTrackArtist(track);
-    const genre = track.song?.genre || "EvCifras";
-    const key = track.song?.artist?.id || artist;
+    const title = getTrackTitle(track);
+    const key = track.song?.id || track.id;
 
     const current = map.get(key);
 
@@ -136,14 +129,13 @@ function getAlbumGroups(tracks: AudioTrack[]) {
 
     map.set(key, {
       id: key,
-      title: artist,
-      subtitle: genre,
+      title,
       coverUrl: getTrackCover(track),
       tracks: [track],
     });
   });
 
-  return Array.from(map.values()).slice(0, 8);
+  return Array.from(map.values()).slice(0, 18);
 }
 
 export function ListenPage() {
@@ -176,18 +168,12 @@ export function ListenPage() {
     });
   }, [tracks, search, typeFilter]);
 
-  const featuredTrack = filteredTracks[0] || tracks[0] || null;
-
-  const quickPicks = useMemo(() => {
-    return filteredTracks.slice(0, 10);
-  }, [filteredTracks]);
-
   const albumGroups = useMemo(() => {
     return getAlbumGroups(filteredTracks);
   }, [filteredTracks]);
 
-  const jukeboxQueue = useMemo(() => {
-    return filteredTracks.slice(0, 20);
+  const quickPicks = useMemo(() => {
+    return filteredTracks.slice(0, 8);
   }, [filteredTracks]);
 
   const guideTracks = useMemo(() => {
@@ -228,144 +214,7 @@ export function ListenPage() {
         Voltar para início
       </Link>
 
-      <section className="relative mt-8 overflow-hidden rounded-[2.5rem] px-1 py-2">
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute left-0 top-0 h-72 w-72 rounded-full bg-violet-500/20 blur-3xl" />
-          <div className="absolute right-10 top-8 h-80 w-80 rounded-full bg-fuchsia-500/10 blur-3xl" />
-          <div className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-blue-500/10 blur-3xl" />
-        </div>
-
-        <div className="relative grid gap-8 md:grid-cols-[1.1fr_360px] md:items-end">
-          <div className="min-w-0">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-violet-100 backdrop-blur">
-              <Sparkles className="h-3.5 w-3.5 text-violet-300" />
-              Jukebox digital
-            </div>
-
-            <h1 className="mt-5 text-5xl font-black tracking-tight text-white md:text-7xl">
-              Ouvir agora
-            </h1>
-
-            <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300 md:text-base">
-              Uma experiência de áudio para estudar, ensaiar e tocar junto:
-              guias, playbacks, demos, aulas e faixas organizadas por música,
-              artista e categoria.
-            </p>
-
-            <div className="mt-7 flex flex-wrap items-center gap-3">
-              {featuredTrack && (
-                <PlayAudioTrackButton
-                  track={featuredTrack}
-                  queue={jukeboxQueue.length > 0 ? jukeboxQueue : tracks}
-                  label="Iniciar jukebox"
-                  className="inline-flex h-13 items-center justify-center gap-3 rounded-full bg-white px-6 py-3 text-sm font-black text-black shadow-2xl shadow-black/30 transition hover:scale-[1.03] hover:bg-slate-100"
-                />
-              )}
-
-              <button
-                type="button"
-                onClick={loadTracks}
-                disabled={loading}
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 text-sm font-bold text-white backdrop-blur transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Radio className="h-4 w-4" />
-                )}
-                {loading ? "Atualizando..." : "Atualizar rádio"}
-              </button>
-            </div>
-
-            <div className="mt-7 flex flex-wrap gap-2">
-              {typeOptions.map((option) => {
-                const active = typeFilter === option.value;
-
-                return (
-                  <button
-                    key={option.value || "ALL"}
-                    type="button"
-                    onClick={() => setTypeFilter(option.value)}
-                    className={[
-                      "h-10 shrink-0 rounded-full px-4 text-sm font-bold transition",
-                      active
-                        ? "bg-white text-black"
-                        : "border border-white/10 bg-white/5 text-white hover:bg-white/10",
-                    ].join(" ")}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="relative">
-            <div className="absolute inset-0 rounded-[2.25rem] bg-violet-500/20 blur-2xl" />
-
-            <div className="relative rounded-[2.25rem] border border-white/10 bg-white/[0.06] p-5 shadow-2xl shadow-black/30 backdrop-blur-xl">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-slate-500">
-                    Tocando em destaque
-                  </p>
-
-                  <h2 className="mt-2 line-clamp-2 text-2xl font-black text-white">
-                    {featuredTrack ? getTrackTitle(featuredTrack) : "EvCifras"}
-                  </h2>
-
-                  <p className="mt-1 truncate text-sm font-semibold text-violet-200">
-                    {featuredTrack ? getTrackArtist(featuredTrack) : "Player"}
-                  </p>
-                </div>
-
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-violet-200">
-                  <Disc3 className="h-8 w-8" />
-                </div>
-              </div>
-
-              <div className="mt-5 h-56 overflow-hidden rounded-[2rem] bg-black/30">
-                {featuredTrack && getTrackCover(featuredTrack) ? (
-                  <img
-                    src={getTrackCover(featuredTrack)}
-                    alt={getTrackArtist(featuredTrack)}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-500/20 via-fuchsia-500/10 to-blue-500/10 text-violet-100">
-                    <Music2 className="h-24 w-24" />
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-5 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-white">
-                    {featuredTrack
-                      ? getTrackSubtitle(featuredTrack)
-                      : "Sem faixa"}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {tracks.length} áudio{tracks.length === 1 ? "" : "s"} na
-                    biblioteca
-                  </p>
-                </div>
-
-                {featuredTrack && (
-                  <PlayAudioTrackButton
-                    track={featuredTrack}
-                    queue={jukeboxQueue}
-                    label=""
-                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white text-black shadow-xl shadow-black/30 transition hover:scale-105 hover:bg-slate-100"
-                  />
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="sticky top-24 z-20 mt-8 rounded-[2rem] border border-white/10 bg-[#070A12]/80 p-3 shadow-2xl shadow-black/20 backdrop-blur-xl">
+      <section className="sticky top-24 z-20 mt-6 rounded-[2rem] border border-white/10 bg-[#070A12]/80 p-3 shadow-2xl shadow-black/20 backdrop-blur-xl">
         <div className="relative">
           <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-violet-300" />
 
@@ -375,6 +224,28 @@ export function ListenPage() {
             placeholder="Buscar música, artista, categoria ou gênero..."
             className="h-12 w-full rounded-2xl border border-violet-400/30 bg-violet-500/10 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-violet-200/70 focus:border-violet-300/60 focus:bg-violet-500/15"
           />
+        </div>
+
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+          {typeOptions.map((option) => {
+            const active = typeFilter === option.value;
+
+            return (
+              <button
+                key={option.value || "ALL"}
+                type="button"
+                onClick={() => setTypeFilter(option.value)}
+                className={[
+                  "h-10 shrink-0 rounded-full px-4 text-sm font-bold transition",
+                  active
+                    ? "bg-white text-black"
+                    : "border border-white/10 bg-white/5 text-white hover:bg-white/10",
+                ].join(" ")}
+              >
+                {option.label}
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -400,14 +271,22 @@ export function ListenPage() {
           </p>
         </div>
       ) : (
-        <div className="mt-10 space-y-12">
+        <div className="mt-8 space-y-12">
+          {albumGroups.length > 0 && (
+            <section>
+              <SectionTitle title="Escolha a dedo" />
+
+              <div className="mt-5 flex snap-x gap-4 overflow-x-auto pb-4">
+                {albumGroups.map((album) => (
+                  <AlbumTouchCard key={album.id} album={album} />
+                ))}
+              </div>
+            </section>
+          )}
+
           {quickPicks.length > 0 && (
             <section>
-              <SectionTitle
-                icon={<PlayCircle className="h-5 w-5" />}
-                title="Escolhas rápidas"
-                description="Faixas prontas para tocar sem abrir outra tela."
-              />
+              <SectionTitle title="Escolhas rápidas" />
 
               <div className="mt-5 grid gap-x-5 gap-y-3 md:grid-cols-2">
                 {quickPicks.map((track, index) => (
@@ -422,26 +301,9 @@ export function ListenPage() {
             </section>
           )}
 
-          {albumGroups.length > 0 && (
-            <section>
-              <SectionTitle
-                icon={<Library className="h-5 w-5" />}
-                title="Álbuns e artistas"
-                description="Agrupado como uma biblioteca de estudos."
-              />
-
-              <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                {albumGroups.map((album) => (
-                  <AlbumCard key={album.id} album={album} />
-                ))}
-              </div>
-            </section>
-          )}
-
           {playbackTracks.length > 0 && (
             <TrackCarousel
-              title="Playbacks para tocar junto"
-              description="Base para ensaio, treino e repertório."
+              title="Playbacks"
               tracks={playbackTracks}
               queue={filteredTracks}
             />
@@ -449,19 +311,14 @@ export function ListenPage() {
 
           {guideTracks.length > 0 && (
             <TrackCarousel
-              title="Guias para estudar"
-              description="Referências rápidas para tirar a música."
+              title="Guias"
               tracks={guideTracks}
               queue={filteredTracks}
             />
           )}
 
           <section>
-            <SectionTitle
-              icon={<Headphones className="h-5 w-5" />}
-              title="Jukebox digital"
-              description="Todas as faixas em uma lista contínua."
-            />
+            <SectionTitle title="Todas as faixas" />
 
             <div className="mt-5 overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.035] shadow-2xl shadow-black/20 backdrop-blur">
               <div className="grid grid-cols-[48px_1fr_96px_72px] gap-3 border-b border-white/10 px-4 py-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-500 md:grid-cols-[56px_1fr_150px_120px_80px]">
@@ -492,30 +349,52 @@ export function ListenPage() {
   );
 }
 
-function SectionTitle({
-  icon,
-  title,
-  description,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-}) {
+function SectionTitle({ title }: { title: string }) {
   return (
-    <div className="flex items-end justify-between gap-4">
-      <div>
-        <div className="flex items-center gap-2 text-violet-200">
-          {icon}
-          <p className="text-sm font-bold">EvCifras</p>
+    <h2 className="text-2xl font-black text-white md:text-3xl">{title}</h2>
+  );
+}
+
+function AlbumTouchCard({ album }: { album: AlbumGroup }) {
+  const firstTrack = album.tracks[0];
+
+  return (
+    <article className="group w-[138px] shrink-0 snap-start sm:w-[160px] md:w-[190px] lg:w-[210px]">
+      <button
+        type="button"
+        className="block w-full text-left"
+        aria-label={`Tocar ${album.title}`}
+      >
+        <div className="relative aspect-square overflow-hidden rounded-[1.7rem] shadow-2xl shadow-black/30 transition duration-300 group-hover:scale-[1.03]">
+          {album.coverUrl ? (
+            <img
+              src={album.coverUrl}
+              alt={album.title}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-500/25 via-fuchsia-500/10 to-blue-500/10 text-violet-200">
+              <Disc3 className="h-14 w-14" />
+            </div>
+          )}
+
+          {firstTrack && (
+            <div className="absolute inset-0 flex items-end justify-end bg-gradient-to-t from-black/50 via-transparent to-transparent p-3 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
+              <PlayAudioTrackButton
+                track={firstTrack}
+                queue={album.tracks}
+                label=""
+                className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-black shadow-xl shadow-black/40 transition hover:scale-105"
+              />
+            </div>
+          )}
         </div>
 
-        <h2 className="mt-2 text-2xl font-black text-white md:text-3xl">
-          {title}
-        </h2>
-
-        <p className="mt-1 text-sm text-slate-400">{description}</p>
-      </div>
-    </div>
+        <p className="mt-3 line-clamp-2 text-sm font-black leading-5 text-white">
+          {album.title}
+        </p>
+      </button>
+    </article>
   );
 }
 
@@ -573,68 +452,18 @@ function FloatingTrackRow({
   );
 }
 
-function AlbumCard({ album }: { album: AlbumGroup }) {
-  const firstTrack = album.tracks[0];
-
-  return (
-    <article className="group min-w-0">
-      <div className="relative overflow-hidden rounded-[2rem] bg-white/[0.04] shadow-2xl shadow-black/20 transition group-hover:scale-[1.02]">
-        <div className="aspect-square overflow-hidden">
-          {album.coverUrl ? (
-            <img
-              src={album.coverUrl}
-              alt={album.title}
-              className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-500/20 via-fuchsia-500/10 to-blue-500/10 text-violet-200">
-              <Disc3 className="h-16 w-16" />
-            </div>
-          )}
-        </div>
-
-        {firstTrack && (
-          <div className="absolute bottom-3 right-3 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
-            <PlayAudioTrackButton
-              track={firstTrack}
-              queue={album.tracks}
-              label=""
-              className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-black shadow-xl shadow-black/40 transition hover:scale-105"
-            />
-          </div>
-        )}
-      </div>
-
-      <h3 className="mt-3 truncate text-sm font-black text-white">
-        {album.title}
-      </h3>
-
-      <p className="mt-1 truncate text-xs font-semibold text-slate-500">
-        {album.subtitle} • {album.tracks.length} faixa
-        {album.tracks.length === 1 ? "" : "s"}
-      </p>
-    </article>
-  );
-}
-
 function TrackCarousel({
   title,
-  description,
   tracks,
   queue,
 }: {
   title: string;
-  description: string;
   tracks: AudioTrack[];
   queue: AudioTrack[];
 }) {
   return (
     <section>
-      <SectionTitle
-        icon={<Music2 className="h-5 w-5" />}
-        title={title}
-        description={description}
-      />
+      <SectionTitle title={title} />
 
       <div className="mt-5 flex gap-4 overflow-x-auto pb-3">
         {tracks.map((track) => {

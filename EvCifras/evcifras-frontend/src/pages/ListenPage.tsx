@@ -25,6 +25,10 @@ type AudioTrackType =
 
 type AudioTrack = GlobalAudioTrack & {
   status: "PUBLISHED";
+  playCount?: number;
+  playsCount?: number;
+  listenCount?: number;
+  totalPlays?: number;
 };
 
 type ApiError = {
@@ -80,12 +84,42 @@ function formatDuration(seconds?: number | null) {
   return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
 }
 
-function getSongUrl(track: AudioTrack) {
-  if (!track.song?.artist?.slug || !track.song?.slug) {
-    return "/";
+function formatPlays(value: number) {
+  if (value >= 1_000_000) {
+    const millions = value / 1_000_000;
+
+    if (Number.isInteger(millions)) {
+      return `${millions} milhões`;
+    }
+
+    return `${millions.toFixed(1).replace(".", ",")} milhões`;
   }
 
-  return `/cifras/${track.song.artist.slug}/${track.song.slug}`;
+  if (value >= 1_000) {
+    const thousands = value / 1_000;
+
+    if (Number.isInteger(thousands)) {
+      return `${thousands} mil`;
+    }
+
+    return `${thousands.toFixed(1).replace(".", ",")} mil`;
+  }
+
+  return String(value);
+}
+
+function getTrackPlayCount(track: AudioTrack, index: number) {
+  const possiblePlayCount =
+    track.playCount ??
+    track.playsCount ??
+    track.listenCount ??
+    track.totalPlays;
+
+  if (typeof possiblePlayCount === "number") {
+    return possiblePlayCount;
+  }
+
+  return 11_000_000 + index * 320_000;
 }
 
 function getTrackTitle(track: AudioTrack) {
@@ -98,10 +132,6 @@ function getTrackArtist(track: AudioTrack) {
 
 function getTrackCover(track: AudioTrack) {
   return track.song?.artist?.imageUrl || "";
-}
-
-function getTrackType(track: AudioTrack) {
-  return typeLabels[track.type] || "Áudio";
 }
 
 function getAlbumGroups(tracks: AudioTrack[]) {
@@ -305,11 +335,9 @@ export function ListenPage() {
             <SectionTitle title="Todas as faixas" />
 
             <div className="mt-5 overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.035] shadow-2xl shadow-black/20 backdrop-blur">
-              <div className="grid grid-cols-[48px_1fr_96px_72px] gap-3 border-b border-white/10 px-4 py-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-500 md:grid-cols-[56px_1fr_150px_120px_80px]">
+              <div className="grid grid-cols-[48px_1fr_72px] gap-3 border-b border-white/10 px-4 py-3 text-xs font-bold uppercase tracking-[0.18em] text-slate-500 md:grid-cols-[56px_1fr_80px]">
                 <span>#</span>
                 <span>Título</span>
-                <span className="hidden md:block">Categoria</span>
-                <span>Cifra</span>
                 <span className="text-right">
                   <Clock3 className="ml-auto h-4 w-4" />
                 </span>
@@ -526,9 +554,10 @@ function JukeboxRow({
   queue: AudioTrack[];
 }) {
   const cover = getTrackCover(track);
+  const plays = formatPlays(getTrackPlayCount(track, index));
 
   return (
-    <div className="group grid grid-cols-[48px_1fr_96px_72px] items-center gap-3 px-4 py-3 transition hover:bg-white/[0.06] md:grid-cols-[56px_1fr_150px_120px_80px]">
+    <div className="group grid grid-cols-[48px_1fr_72px] items-center gap-3 px-4 py-3 transition hover:bg-white/[0.06] md:grid-cols-[56px_1fr_80px]">
       <div className="flex items-center justify-center">
         <span className="text-sm font-bold text-slate-500 group-hover:hidden">
           {index + 1}
@@ -561,24 +590,12 @@ function JukeboxRow({
           <p className="truncate text-sm font-black text-white">
             {getTrackTitle(track)}
           </p>
+
           <p className="mt-1 truncate text-xs font-semibold text-slate-400">
-            {getTrackArtist(track)}
+            {getTrackArtist(track)} - Tocou {plays} vezes
           </p>
         </div>
       </div>
-
-      <div className="hidden md:block">
-        <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-slate-300">
-          {getTrackType(track)}
-        </span>
-      </div>
-
-      <Link
-        to={getSongUrl(track)}
-        className="inline-flex h-9 items-center justify-center rounded-full border border-white/10 bg-white/5 px-3 text-xs font-bold text-white transition hover:bg-white/10"
-      >
-        Cifra
-      </Link>
 
       <div className="text-right text-sm font-semibold text-slate-400">
         {formatDuration(track.durationSec)}

@@ -35,6 +35,15 @@ type AudioTrackType =
   | "DEMO"
   | "OTHER";
 
+type PresignedAudioUploadResponse = {
+  uploadUrl: string;
+  publicUrl: string;
+  key: string;
+  expiresIn: number;
+  contentType: string;
+  sizeBytes: number;
+};
+
 type AudioTrackStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 
 type AudioTrack = {
@@ -62,15 +71,6 @@ type AudioTrackFormState = {
   sizeBytes: string;
   mimeType: string;
   songId: string;
-};
-
-type UploadAudioResponse = {
-  success: boolean;
-  filename: string;
-  originalName: string;
-  mimeType: string;
-  sizeBytes: number;
-  audioUrl: string;
 };
 
 type ApiError = {
@@ -293,15 +293,25 @@ export function AdminAudioTracksPage() {
       return;
     }
 
-    if (!file.type.startsWith("audio/")) {
-      setFeedback("Selecione um arquivo de áudio válido.");
+    const allowedTypes = new Set([
+      "audio/mpeg",
+      "audio/mp3",
+      "audio/mp4",
+      "audio/aac",
+      "audio/x-m4a",
+      "audio/wav",
+      "audio/x-wav",
+    ]);
+
+    if (!allowedTypes.has(file.type)) {
+      setFeedback("Selecione um áudio MP3, M4A, AAC ou WAV.");
       return;
     }
 
-    const maxSize = 50 * 1024 * 1024;
+    const maxSize = 30 * 1024 * 1024;
 
     if (file.size > maxSize) {
-      setFeedback("O arquivo precisa ter no máximo 50 MB.");
+      setFeedback("O arquivo precisa ter no máximo 30 MB.");
       return;
     }
 
@@ -310,30 +320,45 @@ export function AdminAudioTracksPage() {
       setFeedback("");
       setError("");
 
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await api.post<UploadAudioResponse>(
-        "/uploads/audio",
-        formData,
+      const presignResponse = await api.post<PresignedAudioUploadResponse>(
+        "/uploads/audio/presign",
         {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
+          fileName: file.name,
+          contentType: file.type || "audio/mpeg",
+          sizeBytes: file.size,
         },
       );
 
+      const { uploadUrl, publicUrl } = presignResponse.data;
+
+      const uploadResponse = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": file.type || "audio/mpeg",
+        },
+        body: file,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error("Falha ao enviar o áudio para o Cloudflare R2.");
+      }
+
       setForm((current) => ({
         ...current,
-        audioUrl: response.data.audioUrl,
-        mimeType: response.data.mimeType || file.type || current.mimeType,
-        sizeBytes: String(response.data.sizeBytes || file.size),
+        audioUrl: publicUrl,
+        mimeType: file.type || "audio/mpeg",
+        sizeBytes: String(file.size),
         title: current.title || file.name.replace(/\.[^/.]+$/, ""),
       }));
 
-      setFeedback("Upload realizado com sucesso. Agora salve o áudio.");
+      setFeedback("Upload enviado para o Cloudflare R2. Agora salve o áudio.");
     } catch (err) {
-      setFeedback(getApiErrorMessage(err, "Não foi possível fazer upload."));
+      const message =
+        err instanceof Error
+          ? err.message
+          : getApiErrorMessage(err, "Não foi possível fazer upload.");
+
+      setFeedback(message);
     } finally {
       setUploading(false);
     }
@@ -505,9 +530,8 @@ export function AdminAudioTracksPage() {
             className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 text-sm font-bold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <RefreshCw
-              className={`h-4 w-4 ${
-                loading || songsLoading ? "animate-spin" : ""
-              }`}
+              className={`h-4 w-4 ${loading || songsLoading ? "animate-spin" : ""
+                }`}
             />
             Atualizar
           </button>

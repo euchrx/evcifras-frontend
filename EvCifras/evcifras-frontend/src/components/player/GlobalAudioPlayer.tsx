@@ -228,7 +228,7 @@ export function GlobalAudioPlayer() {
       }}
       className="fixed bottom-0 left-0 right-0 z-50 cursor-pointer border-t border-white/10 bg-[#070A12]/95 text-white shadow-2xl shadow-black/50 backdrop-blur-xl print:hidden"
     >
-      <div className="mx-auto max-w-7xl px-4 py-3 md:px-6">
+      <div className="mx-auto max-w-7xl px-3 py-2 md:px-6 md:py-3">
         <input
           type="range"
           min="0"
@@ -236,48 +236,13 @@ export function GlobalAudioPlayer() {
           value={progress}
           onClick={(event) => event.stopPropagation()}
           onChange={(event) => seekToPercent(Number(event.target.value))}
-          className="mb-3 w-full cursor-pointer accent-violet-500"
+          className="mb-2 w-full cursor-pointer accent-violet-500 md:mb-3"
           aria-label="Progresso do áudio"
         />
 
-        <div className="grid items-center gap-4 md:grid-cols-[300px_1fr_300px]">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handlePrevious}
-              disabled={queue.length <= 1}
-              className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-              title="Anterior"
-            >
-              <SkipBack className="h-5 w-5" />
-            </button>
-
-            <button
-              type="button"
-              onClick={handleMainPlayButton}
-              className="flex h-14 w-14 items-center justify-center rounded-full bg-violet-500 text-white shadow-lg shadow-violet-950/40 transition hover:bg-violet-400"
-              title={isPlaying ? "Pausar" : "Tocar"}
-            >
-              {isPlaying ? (
-                <Pause className="h-6 w-6 fill-white" />
-              ) : (
-                <Play className="ml-0.5 h-6 w-6 fill-white" />
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleNext}
-              disabled={queue.length <= 1}
-              className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-              title="Próxima"
-            >
-              <SkipForward className="h-5 w-5" />
-            </button>
-          </div>
-
-          <div className="mx-auto flex min-w-0 max-w-xl items-center justify-start gap-4 text-left">
-            <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-violet-500/10">
+        <div className="grid gap-2 md:grid-cols-[300px_1fr_300px] md:items-center md:gap-4">
+          <div className="flex min-w-0 items-center gap-3 md:order-2 md:mx-auto md:max-w-xl">
+            <div className="h-12 w-12 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-violet-500/10 md:h-14 md:w-14">
               {imageUrl ? (
                 <img
                   src={imageUrl}
@@ -292,18 +257,94 @@ export function GlobalAudioPlayer() {
             </div>
 
             <div className="min-w-0 text-left">
-              <p className="truncate text-base font-black text-white">
+              <p className="truncate text-sm font-black text-white md:text-base">
                 {songTitle}
               </p>
 
-              <p className="mt-0.5 truncate text-sm font-semibold text-violet-200">
+              <p className="mt-0.5 truncate text-xs font-semibold text-violet-200 md:text-sm">
                 {artistName} • {formatTime(currentTime)} /{" "}
                 {formatTime(duration || activeTrack.durationSec || 0)}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center justify-between gap-2 md:order-1 md:justify-start md:gap-3">
+            <div className="flex items-center gap-2 md:gap-3">
+              <button
+                type="button"
+                onClick={handlePrevious}
+                disabled={queue.length <= 1}
+                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 md:h-12 md:w-12"
+                title="Anterior"
+              >
+                <SkipBack className="h-4 w-4 md:h-5 md:w-5" />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleMainPlayButton}
+                className="flex h-12 w-12 items-center justify-center rounded-full bg-violet-500 text-white shadow-lg shadow-violet-950/40 transition hover:bg-violet-400 md:h-14 md:w-14"
+                title={isPlaying ? "Pausar" : "Tocar"}
+              >
+                {isPlaying ? (
+                  <Pause className="h-5 w-5 fill-white md:h-6 md:w-6" />
+                ) : (
+                  <Play className="ml-0.5 h-5 w-5 fill-white md:h-6 md:w-6" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleNext}
+                disabled={queue.length <= 1}
+                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 md:h-12 md:w-12"
+                title="Próxima"
+              >
+                <SkipForward className="h-4 w-4 md:h-5 md:w-5" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 md:hidden">
+              <button
+                type="button"
+                onClick={handleFavorite}
+                className={[
+                  "flex h-10 w-10 items-center justify-center rounded-2xl border transition",
+                  isFavorite
+                    ? "border-pink-400/30 bg-pink-500/15 text-pink-200"
+                    : "border-white/10 bg-white/5 text-white",
+                ].join(" ")}
+                title={isFavorite ? "Remover dos favoritos" : "Favoritar"}
+              >
+                <Heart
+                  className={[
+                    "h-4 w-4",
+                    isFavorite ? "fill-current" : "",
+                  ].join(" ")}
+                />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenQueue}
+                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white"
+                title="Fila"
+              >
+                <ListMusic className="h-4 w-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleClose}
+                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-red-400/20 bg-red-500/10 text-red-200"
+                title="Fechar"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="hidden items-center justify-end gap-2 md:order-3 md:flex">
             <div
               className="hidden items-center gap-3 lg:flex"
               onMouseEnter={() => setIsHoveringVolume(true)}
@@ -361,9 +402,10 @@ export function GlobalAudioPlayer() {
               title={isFavorite ? "Remover dos favoritos" : "Favoritar"}
             >
               <Heart
-                className={["h-5 w-5", isFavorite ? "fill-current" : ""].join(
-                  " ",
-                )}
+                className={[
+                  "h-5 w-5",
+                  isFavorite ? "fill-current" : "",
+                ].join(" ")}
               />
             </button>
 

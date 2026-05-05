@@ -508,7 +508,7 @@ export function ListenTrackPage() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
+      <div className="flex min-h-[50vh] items-center justify-center lg:h-full">
         <div className="flex items-center gap-3 rounded-3xl border border-white/10 bg-white/5 px-6 py-4 text-slate-300">
           <Loader2 className="h-5 w-5 animate-spin text-violet-300" />
           Carregando player...
@@ -546,7 +546,7 @@ export function ListenTrackPage() {
   const imageUrl = getTrackCover(track);
 
   return (
-    <div className="mx-auto h-full max-w-7xl overflow-hidden pb-28">
+    <div className="mx-auto max-w-7xl pb-40 lg:h-full lg:overflow-hidden lg:pb-28">
       <Link
         to="/ouvir"
         className="inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-white"
@@ -555,8 +555,8 @@ export function ListenTrackPage() {
         Voltar para ouvir
       </Link>
 
-      <section className="mt-6 grid h-[calc(100%-2rem)] gap-10 overflow-hidden lg:grid-cols-[1fr_430px]">
-        <div className="flex min-h-0 flex-col items-center justify-center overflow-hidden">
+      <section className="mt-6 grid gap-10 lg:h-[calc(100%-2rem)] lg:overflow-hidden lg:grid-cols-[1fr_430px]">
+        <div className="flex min-h-0 flex-col items-center justify-center overflow-visible lg:overflow-hidden">
           <button
             type="button"
             onClick={handlePlayCurrent}
@@ -586,7 +586,7 @@ export function ListenTrackPage() {
           </h1>
         </div>
 
-        <aside className="min-h-0 overflow-hidden">
+        <aside className="min-h-0 overflow-visible lg:overflow-hidden">
           <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
@@ -631,9 +631,9 @@ export function ListenTrackPage() {
             </button>
           </div>
 
-          <div className="mt-5 h-[calc(100%-4rem)] overflow-hidden">
+          <div className="mt-5 overflow-visible lg:h-[calc(100%-4rem)] lg:overflow-hidden">
             {activeTab === "queue" && (
-              <div className="scrollbar-hide flex h-full flex-col gap-2 overflow-y-auto overflow-x-hidden pr-1">
+              <div className="scrollbar-hide flex max-h-[70vh] flex-col gap-2 overflow-y-auto overflow-x-hidden pr-1 lg:h-full lg:max-h-none">
                 {effectiveQueue.map((item, index) => {
                   const isCurrent = currentTrack?.id === item.id;
                   const cover = getTrackCover(item);
@@ -685,7 +685,7 @@ export function ListenTrackPage() {
             {activeTab === "lyrics" && (
               <div
                 ref={lyricsContainerRef}
-                className="scrollbar-hide h-full overflow-y-auto overflow-x-hidden px-4 pr-4 md:px-5"
+                className="scrollbar-hide max-h-[70vh] overflow-y-auto overflow-x-hidden px-4 pr-4 md:px-5 lg:h-full lg:max-h-none"
               >
                 {lyricsTimeline.length > 0 ? (
                   <div className="space-y-5 pb-32 pt-8">
@@ -735,7 +735,7 @@ export function ListenTrackPage() {
             )}
 
             {activeTab === "related" && (
-              <div className="scrollbar-hide flex h-full flex-col gap-2 overflow-y-auto overflow-x-hidden pr-1">
+              <div className="scrollbar-hide flex max-h-[70vh] flex-col gap-2 overflow-y-auto overflow-x-hidden pr-1 lg:h-full lg:max-h-none">
                 {relatedTracks.length === 0 ? (
                   <div className="shrink-0 rounded-2xl border border-white/10 bg-white/[0.035] p-6 text-center">
                     <Sparkles className="mx-auto h-10 w-10 text-slate-500" />

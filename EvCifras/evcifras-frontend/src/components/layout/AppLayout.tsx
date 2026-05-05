@@ -238,9 +238,8 @@ export function AppLayout() {
                   <>
                     <div
                       className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-sm font-black text-white"
-                      title={`${user?.name || "Usuário"} • ${
-                        user?.role || ""
-                      }`}
+                      title={`${user?.name || "Usuário"} • ${user?.role || ""
+                        }`}
                     >
                       {user?.name?.charAt(0)?.toUpperCase() || "U"}
                     </div>
@@ -360,7 +359,7 @@ export function AppLayout() {
         className={[
           "relative z-10 mx-auto max-w-7xl px-4 md:px-6",
           isListenTrackRoute
-            ? "h-[calc(100vh-5rem)] overflow-hidden py-6"
+            ? "min-h-[calc(100vh-5rem)] overflow-visible pb-40 pt-6 lg:h-[calc(100vh-5rem)] lg:overflow-hidden lg:pb-6"
             : "py-8 md:py-10",
         ].join(" ")}
       >

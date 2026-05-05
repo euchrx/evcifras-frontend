@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
-  Headphones,
   ListMusic,
   Music2,
   Pause,
@@ -16,6 +15,7 @@ import {
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useAudioPlayer } from "../../contexts/AudioPlayerContext";
+import type { GlobalAudioTrack } from "../../contexts/AudioPlayerContext";
 
 const typeLabels: Record<string, string> = {
   ORIGINAL: "Original",
@@ -23,7 +23,7 @@ const typeLabels: Record<string, string> = {
   GUIDE: "Guia",
   LESSON: "Aula",
   DEMO: "Demo",
-  OTHER: "Outro",
+  OTHER: "Áudio",
 };
 
 function formatTime(seconds: number) {
@@ -37,12 +37,16 @@ function formatTime(seconds: number) {
   return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
 }
 
-function getSongUrl(trackId: string, artistSlug?: string, songSlug?: string) {
-  if (!artistSlug || !songSlug) {
-    return `/ouvir/${trackId}`;
-  }
+function getTrackTitle(track: GlobalAudioTrack) {
+  return track.song?.title || track.title || "Áudio";
+}
 
-  return `/cifras/${artistSlug}/${songSlug}`;
+function getTrackArtist(track: GlobalAudioTrack) {
+  return track.song?.artist?.name || "Artista";
+}
+
+function getTrackCover(track: GlobalAudioTrack) {
+  return track.song?.artist?.imageUrl || "";
 }
 
 export function GlobalAudioPlayer() {
@@ -57,6 +61,7 @@ export function GlobalAudioPlayer() {
     currentTime,
     volume,
     progress,
+    playTrack,
     setIsPlaying,
     setIsExpanded,
     seekToPercent,
@@ -71,11 +76,9 @@ export function GlobalAudioPlayer() {
 
   const hideVisualPlayer = /^\/ouvir\/[^/]+/.test(location.pathname);
 
-  const artistName = currentTrack?.song?.artist?.name || "Artista";
-  const songTitle = currentTrack?.song?.title || currentTrack?.title || "Áudio";
-  const imageUrl = currentTrack?.song?.artist?.imageUrl;
-  const artistSlug = currentTrack?.song?.artist?.slug;
-  const songSlug = currentTrack?.song?.slug;
+  const artistName = currentTrack ? getTrackArtist(currentTrack) : "Artista";
+  const songTitle = currentTrack ? getTrackTitle(currentTrack) : "Áudio";
+  const imageUrl = currentTrack ? getTrackCover(currentTrack) : "";
 
   useEffect(() => {
     if (!currentTrack || !("mediaSession" in navigator)) {
@@ -158,7 +161,10 @@ export function GlobalAudioPlayer() {
         />
 
         <div className="flex items-center gap-3">
-          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-violet-500/10 md:h-14 md:w-14">
+          <Link
+            to={`/ouvir/${currentTrack.id}`}
+            className="h-12 w-12 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-violet-500/10 md:h-14 md:w-14"
+          >
             {imageUrl ? (
               <img
                 src={imageUrl}
@@ -170,12 +176,13 @@ export function GlobalAudioPlayer() {
                 <Music2 className="h-5 w-5" />
               </div>
             )}
-          </div>
+          </Link>
 
-          <div className="min-w-0 flex-1">
+          <Link to={`/ouvir/${currentTrack.id}`} className="min-w-0 flex-1">
             <p className="truncate text-sm font-black text-white md:text-base">
               {songTitle}
             </p>
+
             <p className="truncate text-xs font-semibold text-violet-200">
               {artistName}
             </p>
@@ -187,7 +194,7 @@ export function GlobalAudioPlayer() {
               <span>•</span>
               <span>{typeLabels[currentTrack.type] || "Áudio"}</span>
             </div>
-          </div>
+          </Link>
 
           <div className="flex shrink-0 items-center gap-1">
             <button
@@ -258,13 +265,6 @@ export function GlobalAudioPlayer() {
           </div>
 
           <div className="flex shrink-0 items-center gap-1">
-            <Link
-              to={getSongUrl(currentTrack.id, artistSlug, songSlug)}
-              className="hidden h-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-3 text-xs font-bold text-white transition hover:bg-white/10 md:inline-flex"
-            >
-              Cifra
-            </Link>
-
             <button
               type="button"
               onClick={() => setShowQueue((current) => !current)}
@@ -320,7 +320,6 @@ export function GlobalAudioPlayer() {
                 to={`/ouvir/${currentTrack.id}`}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 text-sm font-bold text-white"
               >
-                <Headphones className="h-4 w-4" />
                 Player
               </Link>
 
@@ -352,33 +351,56 @@ export function GlobalAudioPlayer() {
           </div>
         )}
 
-        {showQueue && queue.length > 1 && (
-          <div className="mt-3 hidden max-h-52 overflow-y-auto rounded-2xl border border-white/10 bg-black/30 p-3 sm:block">
+        {showQueue && queue.length > 0 && (
+          <div className="mt-3 max-h-64 overflow-y-auto rounded-2xl border border-white/10 bg-black/40 p-3">
             <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
-              Fila
+              Fila de reprodução
             </p>
 
             <div className="grid gap-2">
               {queue.map((track, index) => {
                 const isCurrent = track.id === currentTrack.id;
+                const cover = getTrackCover(track);
 
                 return (
-                  <div
+                  <button
                     key={`${track.id}-${index}`}
+                    type="button"
+                    onClick={() => playTrack(track, queue)}
                     className={[
-                      "rounded-xl border px-3 py-2 text-sm",
+                      "flex items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
                       isCurrent
                         ? "border-violet-400/30 bg-violet-500/15 text-violet-100"
-                        : "border-white/10 bg-white/5 text-slate-300",
+                        : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10",
                     ].join(" ")}
                   >
-                    <p className="truncate font-bold">
-                      {index + 1}. {track.song?.title || track.title}
-                    </p>
-                    <p className="truncate text-xs text-slate-500">
-                      {track.song?.artist?.name || "Artista"}
-                    </p>
-                  </div>
+                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-white/10">
+                      {cover ? (
+                        <img
+                          src={cover}
+                          alt={getTrackArtist(track)}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-violet-200">
+                          <Music2 className="h-4 w-4" />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold">
+                        {index + 1}. {getTrackTitle(track)}
+                      </p>
+                      <p className="truncate text-xs text-slate-500">
+                        {getTrackArtist(track)}
+                      </p>
+                    </div>
+
+                    {isCurrent && isPlaying && (
+                      <Pause className="h-4 w-4 text-violet-200" />
+                    )}
+                  </button>
                 );
               })}
             </div>

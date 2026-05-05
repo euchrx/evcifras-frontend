@@ -2,15 +2,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   ArrowLeft,
-  BookOpen,
   Clock3,
-  Headphones,
+  FileText,
+  ListMusic,
   Loader2,
   Music2,
   Pause,
   Play,
   RotateCcw,
   RotateCw,
+  Sparkles,
   Volume2,
 } from "lucide-react";
 import { api } from "../services/api";
@@ -28,33 +29,13 @@ type AudioTrackType =
   | "DEMO"
   | "OTHER";
 
-type AudioTrack = {
-  id: string;
-  title: string;
-  description?: string | null;
-  type: AudioTrackType;
+type AudioTrack = GlobalAudioTrack & {
   status: "PUBLISHED";
-  audioUrl: string;
-  durationSec?: number | null;
-  sizeBytes?: number | null;
-  mimeType?: string | null;
-  songId: string;
-  song?: {
-    id: string;
-    title: string;
-    slug: string;
-    originalKey?: string | null;
-    currentKey?: string | null;
-    genre?: string | null;
-    artist?: {
-      id: string;
-      name: string;
-      slug: string;
-      imageUrl?: string | null;
-    } | null;
-  } | null;
-  createdAt: string;
-  updatedAt: string;
+  song?: GlobalAudioTrack["song"] & {
+    lyrics?: string | null;
+    lyric?: string | null;
+    content?: string | null;
+  };
 };
 
 type ApiError = {
@@ -65,14 +46,7 @@ type ApiError = {
   };
 };
 
-const typeLabels: Record<AudioTrackType, string> = {
-  ORIGINAL: "Original",
-  PLAYBACK: "Playback",
-  GUIDE: "Guia",
-  LESSON: "Aula",
-  DEMO: "Demo",
-  OTHER: "Outro",
-};
+type PlayerTab = "queue" | "lyrics" | "related";
 
 function getApiErrorMessage(error: unknown, fallback: string) {
   const apiError = error as ApiError;
@@ -88,14 +62,6 @@ function formatTime(seconds: number) {
   const remainingSeconds = Math.floor(seconds % 60);
 
   return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
-}
-
-function getSongUrl(track: AudioTrack) {
-  if (!track.song?.artist?.slug || !track.song?.slug) {
-    return "/";
-  }
-
-  return `/cifras/${track.song.artist.slug}/${track.song.slug}`;
 }
 
 function getPlayableAudioUrl(audioUrl: string) {
@@ -117,11 +83,38 @@ function getPlayableAudioUrl(audioUrl: string) {
   }
 }
 
+function getTrackTitle(track: GlobalAudioTrack | AudioTrack) {
+  return track.song?.title || track.title || "Áudio";
+}
+
+function getTrackArtist(track: GlobalAudioTrack | AudioTrack) {
+  return track.song?.artist?.name || "Artista";
+}
+
+function getTrackCover(track: GlobalAudioTrack | AudioTrack) {
+  return track.song?.artist?.imageUrl || "";
+}
+
+function getTrackGenre(track: GlobalAudioTrack | AudioTrack) {
+  return track.song?.genre || "";
+}
+
+function getLyrics(track: AudioTrack) {
+  return (
+    track.song?.lyrics ||
+    track.song?.lyric ||
+    track.song?.content ||
+    track.description ||
+    ""
+  );
+}
+
 export function ListenTrackPage() {
   const { trackId } = useParams<{ trackId: string }>();
 
   const {
     currentTrack,
+    queue,
     isPlaying,
     duration,
     currentTime,
@@ -135,12 +128,15 @@ export function ListenTrackPage() {
   } = useAudioPlayer();
 
   const [track, setTrack] = useState<AudioTrack | null>(null);
+  const [allTracks, setAllTracks] = useState<AudioTrack[]>([]);
+  const [activeTab, setActiveTab] = useState<PlayerTab>("queue");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const artistName = track?.song?.artist?.name || "Artista";
-  const songTitle = track?.song?.title || track?.title || "Áudio";
-  const imageUrl = track?.song?.artist?.imageUrl;
+  const artistName = track ? getTrackArtist(track) : "Artista";
+  const songTitle = track ? getTrackTitle(track) : "Áudio";
+  const imageUrl = track ? getTrackCover(track) : "";
+  const genre = track ? getTrackGenre(track) : "";
   const playableAudioUrl = track ? getPlayableAudioUrl(track.audioUrl) : "";
 
   const isCurrentTrack = currentTrack?.id === track?.id;
@@ -162,6 +158,40 @@ export function ListenTrackPage() {
     };
   }, [track, playableAudioUrl]);
 
+  const relatedTracks = useMemo(() => {
+    if (!track) {
+      return [];
+    }
+
+    const currentGenre = getTrackGenre(track).toLowerCase();
+
+    if (!currentGenre) {
+      return allTracks.filter((item) => item.id !== track.id).slice(0, 12);
+    }
+
+    return allTracks
+      .filter((item) => {
+        const itemGenre = getTrackGenre(item).toLowerCase();
+
+        return item.id !== track.id && itemGenre === currentGenre;
+      })
+      .slice(0, 12);
+  }, [allTracks, track]);
+
+  const effectiveQueue = useMemo(() => {
+    if (queue.length > 0) {
+      return queue;
+    }
+
+    if (playerTrack) {
+      return [playerTrack];
+    }
+
+    return [];
+  }, [queue, playerTrack]);
+
+  const lyrics = track ? getLyrics(track) : "";
+
   const loadTrack = useCallback(async () => {
     if (!trackId) {
       setError("Áudio inválido.");
@@ -173,8 +203,13 @@ export function ListenTrackPage() {
       setLoading(true);
       setError("");
 
-      const response = await api.get<AudioTrack>(`/audio-tracks/${trackId}`);
-      setTrack(response.data);
+      const [trackResponse, tracksResponse] = await Promise.all([
+        api.get<AudioTrack>(`/audio-tracks/${trackId}`),
+        api.get<AudioTrack[]>("/audio-tracks"),
+      ]);
+
+      setTrack(trackResponse.data);
+      setAllTracks(tracksResponse.data);
     } catch (err) {
       setError(getApiErrorMessage(err, "Não foi possível carregar o áudio."));
     } finally {
@@ -198,7 +233,7 @@ export function ListenTrackPage() {
       return;
     }
 
-    playTrack(playerTrack, [playerTrack]);
+    playTrack(playerTrack, [playerTrack, ...relatedTracks]);
   }
 
   function handleSeek(value: string) {
@@ -207,6 +242,10 @@ export function ListenTrackPage() {
     }
 
     seekToPercent(Number(value));
+  }
+
+  function handlePlayFromList(nextTrack: GlobalAudioTrack, nextQueue: GlobalAudioTrack[]) {
+    playTrack(nextTrack, nextQueue);
   }
 
   if (loading) {
@@ -245,7 +284,7 @@ export function ListenTrackPage() {
   }
 
   return (
-    <div className="mx-auto max-w-lg pb-20">
+    <div className="mx-auto max-w-7xl pb-20">
       <Link
         to="/ouvir"
         className="inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-white"
@@ -254,151 +293,284 @@ export function ListenTrackPage() {
         Voltar para ouvir
       </Link>
 
-      <section className="mt-6 overflow-hidden rounded-[2.25rem] border border-white/10 bg-gradient-to-br from-violet-500/20 via-white/[0.05] to-blue-500/10 p-5 shadow-2xl shadow-black/30">
-        <div className="flex items-center justify-between gap-3">
-          <div className="inline-flex items-center gap-2 rounded-full border border-violet-400/20 bg-violet-500/10 px-3 py-1 text-xs font-semibold text-violet-200">
-            <Headphones className="h-3.5 w-3.5" />
-            {typeLabels[track.type]}
-          </div>
+      <section className="mt-6 grid gap-6 lg:grid-cols-[1fr_420px]">
+        <div className="rounded-[2.25rem] border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/30 backdrop-blur md:p-7">
+          <div className="grid gap-8 md:grid-cols-[340px_1fr] md:items-center">
+            <div className="mx-auto w-full max-w-[340px]">
+              <div className="aspect-square overflow-hidden rounded-[2.25rem] border border-white/10 bg-black/30 shadow-2xl shadow-black/40">
+                {imageUrl ? (
+                  <img
+                    src={imageUrl}
+                    alt={artistName}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-violet-500/10 text-violet-200">
+                    <Music2 className="h-24 w-24" />
+                  </div>
+                )}
+              </div>
+            </div>
 
-          <div className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-slate-300">
-            <Clock3 className="h-3.5 w-3.5" />
-            {formatTime(effectiveDuration)}
+            <div className="min-w-0">
+              <p className="text-sm font-bold uppercase tracking-[0.22em] text-violet-300">
+                {genre || "Player"}
+              </p>
+
+              <h1 className="mt-4 text-4xl font-black tracking-tight text-white md:text-6xl">
+                {songTitle}
+              </h1>
+
+              <p className="mt-3 text-lg font-semibold text-violet-200">
+                {artistName}
+              </p>
+
+              <div className="mt-8">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={effectiveProgress}
+                  onChange={(event) => handleSeek(event.target.value)}
+                  disabled={!isCurrentTrack}
+                  className="w-full accent-violet-500 disabled:opacity-40"
+                  aria-label="Progresso do áudio"
+                />
+
+                <div className="mt-2 flex justify-between text-xs font-semibold text-slate-400">
+                  <span>{formatTime(effectiveCurrentTime)}</span>
+                  <span>{formatTime(effectiveDuration)}</span>
+                </div>
+              </div>
+
+              <div className="mt-8 flex items-center gap-5">
+                <button
+                  type="button"
+                  onClick={() => skipSeconds(-10)}
+                  disabled={!isCurrentTrack}
+                  className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <RotateCcw className="h-5 w-5" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handlePlayPause}
+                  className="flex h-20 w-20 items-center justify-center rounded-full bg-violet-500 text-white shadow-2xl shadow-violet-950/40 transition hover:bg-violet-400"
+                >
+                  {effectiveIsPlaying ? (
+                    <Pause className="h-9 w-9 fill-white" />
+                  ) : (
+                    <Play className="ml-1 h-9 w-9 fill-white" />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => skipSeconds(10)}
+                  disabled={!isCurrentTrack}
+                  className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <RotateCw className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="mt-8 flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+                <Volume2 className="h-4 w-4 text-slate-400" />
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={Math.round(volume * 100)}
+                  onChange={(event) =>
+                    setVolumeValue(Number(event.target.value) / 100)
+                  }
+                  className="w-full accent-violet-500"
+                  aria-label="Volume"
+                />
+              </div>
+
+              <div className="mt-4">
+                <OfflineAudioButton track={playerTrack} />
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="mt-8 flex justify-center">
-          <div className="h-64 w-64 overflow-hidden rounded-[2.25rem] border border-white/10 bg-black/30 shadow-2xl shadow-black/40">
-            {imageUrl ? (
-              <img
-                src={imageUrl}
-                alt={artistName}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center bg-violet-500/10 text-violet-200">
-                <Music2 className="h-24 w-24" />
+        <aside className="rounded-[2.25rem] border border-white/10 bg-white/[0.04] p-4 shadow-2xl shadow-black/30 backdrop-blur">
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab("queue")}
+              className={[
+                "inline-flex h-11 items-center justify-center gap-2 rounded-2xl px-3 text-xs font-black transition",
+                activeTab === "queue"
+                  ? "bg-white text-black"
+                  : "bg-white/5 text-white hover:bg-white/10",
+              ].join(" ")}
+            >
+              <ListMusic className="h-4 w-4" />
+              Fila
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("lyrics")}
+              className={[
+                "inline-flex h-11 items-center justify-center gap-2 rounded-2xl px-3 text-xs font-black transition",
+                activeTab === "lyrics"
+                  ? "bg-white text-black"
+                  : "bg-white/5 text-white hover:bg-white/10",
+              ].join(" ")}
+            >
+              <FileText className="h-4 w-4" />
+              Letra
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("related")}
+              className={[
+                "inline-flex h-11 items-center justify-center gap-2 rounded-2xl px-3 text-xs font-black transition",
+                activeTab === "related"
+                  ? "bg-white text-black"
+                  : "bg-white/5 text-white hover:bg-white/10",
+              ].join(" ")}
+            >
+              <Sparkles className="h-4 w-4" />
+              Relacionados
+            </button>
+          </div>
+
+          <div className="mt-4 max-h-[620px] overflow-y-auto pr-1">
+            {activeTab === "queue" && (
+              <div className="grid gap-2">
+                {effectiveQueue.map((item, index) => {
+                  const isCurrent = currentTrack?.id === item.id;
+                  const cover = getTrackCover(item);
+
+                  return (
+                    <button
+                      key={`${item.id}-${index}`}
+                      type="button"
+                      onClick={() => handlePlayFromList(item, effectiveQueue)}
+                      className={[
+                        "flex items-center gap-3 rounded-2xl border p-3 text-left transition",
+                        isCurrent
+                          ? "border-violet-400/30 bg-violet-500/15"
+                          : "border-white/10 bg-white/5 hover:bg-white/10",
+                      ].join(" ")}
+                    >
+                      <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-white/10">
+                        {cover ? (
+                          <img
+                            src={cover}
+                            alt={getTrackArtist(item)}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-violet-200">
+                            <Music2 className="h-5 w-5" />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-black text-white">
+                          {index + 1}. {getTrackTitle(item)}
+                        </p>
+                        <p className="mt-1 truncate text-xs font-semibold text-slate-400">
+                          {getTrackArtist(item)}
+                        </p>
+                      </div>
+
+                      {isCurrent && isPlaying && (
+                        <Pause className="h-4 w-4 text-violet-200" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {activeTab === "lyrics" && (
+              <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
+                {lyrics ? (
+                  <pre className="whitespace-pre-wrap font-sans text-sm leading-7 text-slate-200">
+                    {lyrics}
+                  </pre>
+                ) : (
+                  <div className="py-10 text-center">
+                    <FileText className="mx-auto h-10 w-10 text-slate-500" />
+                    <p className="mt-4 text-sm font-bold text-white">
+                      Letra não cadastrada
+                    </p>
+                    <p className="mt-2 text-sm text-slate-400">
+                      Cadastre a letra na música para aparecer aqui.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "related" && (
+              <div className="grid gap-2">
+                {relatedTracks.length === 0 ? (
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-6 text-center">
+                    <Sparkles className="mx-auto h-10 w-10 text-slate-500" />
+                    <p className="mt-4 text-sm font-bold text-white">
+                      Nenhuma música relacionada
+                    </p>
+                    <p className="mt-2 text-sm text-slate-400">
+                      Quando houver mais músicas do mesmo gênero, elas aparecem
+                      aqui.
+                    </p>
+                  </div>
+                ) : (
+                  relatedTracks.map((item) => {
+                    const cover = getTrackCover(item);
+
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() =>
+                          handlePlayFromList(item, [playerTrack, ...relatedTracks])
+                        }
+                        className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 text-left transition hover:bg-white/10"
+                      >
+                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-white/10">
+                          {cover ? (
+                            <img
+                              src={cover}
+                              alt={getTrackArtist(item)}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-violet-200">
+                              <Music2 className="h-5 w-5" />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-black text-white">
+                            {getTrackTitle(item)}
+                          </p>
+                          <p className="mt-1 truncate text-xs font-semibold text-slate-400">
+                            {getTrackArtist(item)}
+                          </p>
+                        </div>
+
+                        <Play className="h-4 w-4 text-slate-500" />
+                      </button>
+                    );
+                  })
+                )}
               </div>
             )}
           </div>
-        </div>
-
-        <div className="mt-8 text-center">
-          <h1 className="text-3xl font-black tracking-tight text-white">
-            {songTitle}
-          </h1>
-
-          <p className="mt-2 text-base font-semibold text-violet-200">
-            {artistName}
-          </p>
-
-          <p className="mt-1 text-sm text-slate-400">
-            {typeLabels[track.type]}
-          </p>
-        </div>
-
-        {track.description && (
-          <p className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-center text-sm leading-6 text-slate-300">
-            {track.description}
-          </p>
-        )}
-
-        <div className="mt-8">
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={effectiveProgress}
-            onChange={(event) => handleSeek(event.target.value)}
-            disabled={!isCurrentTrack}
-            className="w-full accent-violet-500 disabled:opacity-40"
-            aria-label="Progresso do áudio"
-          />
-
-          <div className="mt-2 flex justify-between text-xs font-semibold text-slate-400">
-            <span>{formatTime(effectiveCurrentTime)}</span>
-            <span>{formatTime(effectiveDuration)}</span>
-          </div>
-        </div>
-
-        <div className="mt-8 flex items-center justify-center gap-5">
-          <button
-            type="button"
-            onClick={() => skipSeconds(-10)}
-            disabled={!isCurrentTrack}
-            className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <RotateCcw className="h-5 w-5" />
-          </button>
-
-          <button
-            type="button"
-            onClick={handlePlayPause}
-            className="flex h-20 w-20 items-center justify-center rounded-full bg-violet-500 text-white shadow-2xl shadow-violet-950/40 transition hover:bg-violet-400"
-          >
-            {effectiveIsPlaying ? (
-              <Pause className="h-9 w-9 fill-white" />
-            ) : (
-              <Play className="ml-1 h-9 w-9 fill-white" />
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => skipSeconds(10)}
-            disabled={!isCurrentTrack}
-            className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <RotateCw className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="mt-8 flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-          <Volume2 className="h-4 w-4 text-slate-400" />
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={Math.round(volume * 100)}
-            onChange={(event) =>
-              setVolumeValue(Number(event.target.value) / 100)
-            }
-            className="w-full accent-violet-500"
-            aria-label="Volume"
-          />
-        </div>
-
-        <div className="mt-4">
-          <OfflineAudioButton track={playerTrack} />
-        </div>
-
-        {error && (
-          <div className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-center text-sm text-red-200">
-            {error}
-          </div>
-        )}
-
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          <Link
-            to={getSongUrl(track)}
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-bold text-white transition hover:bg-white/10"
-          >
-            <BookOpen className="h-4 w-4" />
-            Abrir cifra
-          </Link>
-
-          <Link
-            to="/ouvir"
-            className="inline-flex h-12 items-center justify-center rounded-2xl bg-violet-500 px-4 text-sm font-bold text-white shadow-lg shadow-violet-950/40 transition hover:bg-violet-400"
-          >
-            Mais áudios
-          </Link>
-        </div>
-
-        <p className="mt-6 text-center text-xs leading-5 text-slate-500">
-          A música continua tocando ao sair desta tela. O player global aparece
-          automaticamente nas outras páginas.
-        </p>
+        </aside>
       </section>
     </div>
   );

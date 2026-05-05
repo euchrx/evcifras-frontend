@@ -34,6 +34,9 @@ export type GlobalAudioTrack = {
     originalKey?: string | null;
     currentKey?: string | null;
     genre?: string | null;
+    lyrics?: string | null;
+    lyric?: string | null;
+    content?: string | null;
     artist?: {
       id: string;
       name: string;
@@ -74,6 +77,28 @@ type AudioPlayerContextValue = {
 
 const AudioPlayerContext = createContext<AudioPlayerContextValue | null>(null);
 
+const STORAGE_VOLUME_KEY = "evcifras_audio_volume";
+
+function getInitialVolume() {
+  if (typeof window === "undefined") {
+    return 1;
+  }
+
+  const saved = window.localStorage.getItem(STORAGE_VOLUME_KEY);
+
+  if (!saved) {
+    return 1;
+  }
+
+  const parsed = Number(saved);
+
+  if (Number.isNaN(parsed)) {
+    return 1;
+  }
+
+  return Math.min(1, Math.max(0, parsed));
+}
+
 export function AudioPlayerProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const activeTrackIdRef = useRef<string>("");
@@ -89,7 +114,7 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
 
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
-  const [volume, setVolume] = useState(1);
+  const [volume, setVolume] = useState(getInitialVolume);
 
   const progress = useMemo(() => {
     if (!duration) {
@@ -270,6 +295,10 @@ export function AudioPlayerProvider({ children }: { children: ReactNode }) {
     const nextVolume = Math.min(1, Math.max(0, value));
 
     setVolume(nextVolume);
+
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(STORAGE_VOLUME_KEY, String(nextVolume));
+    }
 
     if (audio) {
       audio.volume = nextVolume;

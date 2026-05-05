@@ -100,6 +100,24 @@ function getLyrics(track: AudioTrack) {
   );
 }
 
+function shuffleTracks<T>(items: T[]) {
+  const copy = [...items];
+
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    [copy[index], copy[randomIndex]] = [copy[randomIndex], copy[index]];
+  }
+
+  return copy;
+}
+
+function buildRandomQueue(track: GlobalAudioTrack, source: GlobalAudioTrack[]) {
+  const withoutCurrent = source.filter((item) => item.id !== track.id);
+  const randomTracks = shuffleTracks(withoutCurrent).slice(0, 24);
+
+  return [track, ...randomTracks];
+}
+
 export function ListenTrackPage() {
   const { trackId } = useParams<{ trackId: string }>();
 
@@ -127,7 +145,6 @@ export function ListenTrackPage() {
   const artistName = track ? getTrackArtist(track) : "Artista";
   const songTitle = track ? getTrackTitle(track) : "Áudio";
   const imageUrl = track ? getTrackCover(track) : "";
-  const genre = track ? getTrackGenre(track) : "";
   const playableAudioUrl = track ? getPlayableAudioUrl(track.audioUrl) : "";
 
   const isCurrentTrack = currentTrack?.id === track?.id;
@@ -169,9 +186,22 @@ export function ListenTrackPage() {
       .slice(0, 12);
   }, [allTracks, track]);
 
+  const suggestedQueue = useMemo(() => {
+    if (!playerTrack) {
+      return [];
+    }
+
+    const source = allTracks.length > 0 ? allTracks : [playerTrack];
+    return buildRandomQueue(playerTrack, source);
+  }, [allTracks, playerTrack]);
+
   const effectiveQueue = useMemo(() => {
-    if (queue.length > 0) {
+    if (queue.length > 1) {
       return queue;
+    }
+
+    if (suggestedQueue.length > 0) {
+      return suggestedQueue;
     }
 
     if (playerTrack) {
@@ -179,7 +209,7 @@ export function ListenTrackPage() {
     }
 
     return [];
-  }, [queue, playerTrack]);
+  }, [queue, suggestedQueue, playerTrack]);
 
   const lyrics = track ? getLyrics(track) : "";
 
@@ -224,7 +254,7 @@ export function ListenTrackPage() {
       return;
     }
 
-    playTrack(playerTrack, [playerTrack, ...relatedTracks]);
+    playTrack(playerTrack, suggestedQueue.length > 0 ? suggestedQueue : [playerTrack]);
   }
 
   function handleSeek(value: string) {
@@ -235,7 +265,10 @@ export function ListenTrackPage() {
     seekToPercent(Number(value));
   }
 
-  function handlePlayFromList(nextTrack: GlobalAudioTrack, nextQueue: GlobalAudioTrack[]) {
+  function handlePlayFromList(
+    nextTrack: GlobalAudioTrack,
+    nextQueue: GlobalAudioTrack[],
+  ) {
     playTrack(nextTrack, nextQueue);
   }
 
@@ -284,111 +317,103 @@ export function ListenTrackPage() {
         Voltar para ouvir
       </Link>
 
-      <section className="mt-6 grid gap-6 lg:grid-cols-[1fr_420px]">
-        <div className="rounded-[2.25rem] border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/30 backdrop-blur md:p-7">
-          <div className="grid gap-8 md:grid-cols-[340px_1fr] md:items-center">
-            <div className="mx-auto w-full max-w-[340px]">
-              <div className="aspect-square overflow-hidden rounded-[2.25rem] border border-white/10 bg-black/30 shadow-2xl shadow-black/40">
-                {imageUrl ? (
-                  <img
-                    src={imageUrl}
-                    alt={artistName}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-violet-500/10 text-violet-200">
-                    <Music2 className="h-24 w-24" />
-                  </div>
-                )}
-              </div>
-            </div>
+      <section className="mt-8 grid gap-10 lg:grid-cols-[1fr_430px]">
+        <div className="flex min-h-[620px] flex-col items-center justify-center">
+          <p className="text-center text-lg font-semibold text-violet-200">
+            {artistName}
+          </p>
 
-            <div className="min-w-0">
-              <p className="text-sm font-bold uppercase tracking-[0.22em] text-violet-300">
-                {genre || "Player"}
-              </p>
-
-              <h1 className="mt-4 text-4xl font-black tracking-tight text-white md:text-6xl">
-                {songTitle}
-              </h1>
-
-              <p className="mt-3 text-lg font-semibold text-violet-200">
-                {artistName}
-              </p>
-
-              <div className="mt-8">
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={effectiveProgress}
-                  onChange={(event) => handleSeek(event.target.value)}
-                  disabled={!isCurrentTrack}
-                  className="w-full accent-violet-500 disabled:opacity-40"
-                  aria-label="Progresso do áudio"
+          <div className="mt-7 w-full max-w-[420px]">
+            <div className="aspect-square overflow-hidden rounded-[2.5rem] shadow-2xl shadow-black/50">
+              {imageUrl ? (
+                <img
+                  src={imageUrl}
+                  alt={artistName}
+                  className="h-full w-full object-cover"
                 />
-
-                <div className="mt-2 flex justify-between text-xs font-semibold text-slate-400">
-                  <span>{formatTime(effectiveCurrentTime)}</span>
-                  <span>{formatTime(effectiveDuration)}</span>
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-violet-500/10 text-violet-200">
+                  <Music2 className="h-24 w-24" />
                 </div>
-              </div>
-
-              <div className="mt-8 flex items-center gap-5">
-                <button
-                  type="button"
-                  onClick={() => skipSeconds(-10)}
-                  disabled={!isCurrentTrack}
-                  className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <RotateCcw className="h-5 w-5" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handlePlayPause}
-                  className="flex h-20 w-20 items-center justify-center rounded-full bg-violet-500 text-white shadow-2xl shadow-violet-950/40 transition hover:bg-violet-400"
-                >
-                  {effectiveIsPlaying ? (
-                    <Pause className="h-9 w-9 fill-white" />
-                  ) : (
-                    <Play className="ml-1 h-9 w-9 fill-white" />
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => skipSeconds(10)}
-                  disabled={!isCurrentTrack}
-                  className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <RotateCw className="h-5 w-5" />
-                </button>
-              </div>
-
-              <div className="mt-8 flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-                <Volume2 className="h-4 w-4 text-slate-400" />
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={Math.round(volume * 100)}
-                  onChange={(event) =>
-                    setVolumeValue(Number(event.target.value) / 100)
-                  }
-                  className="w-full accent-violet-500"
-                  aria-label="Volume"
-                />
-              </div>
-
-              <div className="mt-4">
-                <OfflineAudioButton track={playerTrack} />
-              </div>
+              )}
             </div>
+          </div>
+
+          <h1 className="mt-7 max-w-3xl text-center text-4xl font-black tracking-tight text-white md:text-6xl">
+            {songTitle}
+          </h1>
+
+          <div className="mt-10 w-full max-w-3xl">
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={effectiveProgress}
+              onChange={(event) => handleSeek(event.target.value)}
+              disabled={!isCurrentTrack}
+              className="w-full accent-violet-500 disabled:opacity-40"
+              aria-label="Progresso do áudio"
+            />
+
+            <div className="mt-2 flex justify-between text-xs font-semibold text-slate-400">
+              <span>{formatTime(effectiveCurrentTime)}</span>
+              <span>{formatTime(effectiveDuration)}</span>
+            </div>
+          </div>
+
+          <div className="mt-8 flex items-center justify-center gap-5">
+            <button
+              type="button"
+              onClick={() => skipSeconds(-10)}
+              disabled={!isCurrentTrack}
+              className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <RotateCcw className="h-5 w-5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handlePlayPause}
+              className="flex h-20 w-20 items-center justify-center rounded-full bg-violet-500 text-white shadow-2xl shadow-violet-950/40 transition hover:bg-violet-400"
+            >
+              {effectiveIsPlaying ? (
+                <Pause className="h-9 w-9 fill-white" />
+              ) : (
+                <Play className="ml-1 h-9 w-9 fill-white" />
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => skipSeconds(10)}
+              disabled={!isCurrentTrack}
+              className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <RotateCw className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="mt-8 flex w-full max-w-xl items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3 backdrop-blur">
+            <Volume2 className="h-4 w-4 text-slate-400" />
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={Math.round(volume * 100)}
+              onChange={(event) =>
+                setVolumeValue(Number(event.target.value) / 100)
+              }
+              className="w-full accent-violet-500"
+              aria-label="Volume"
+            />
+          </div>
+
+          <div className="mt-4">
+            <OfflineAudioButton track={playerTrack} />
           </div>
         </div>
 
-        <aside className="rounded-[2.25rem] border border-white/10 bg-white/[0.04] p-4 shadow-2xl shadow-black/30 backdrop-blur">
+        <aside className="min-h-[620px]">
           <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
@@ -433,7 +458,7 @@ export function ListenTrackPage() {
             </button>
           </div>
 
-          <div className="mt-4 max-h-[620px] overflow-y-auto pr-1">
+          <div className="mt-5 max-h-[650px] overflow-y-auto pr-1">
             {activeTab === "queue" && (
               <div className="grid gap-2">
                 {effectiveQueue.map((item, index) => {
@@ -449,7 +474,7 @@ export function ListenTrackPage() {
                         "flex items-center gap-3 rounded-2xl border p-3 text-left transition",
                         isCurrent
                           ? "border-violet-400/30 bg-violet-500/15"
-                          : "border-white/10 bg-white/5 hover:bg-white/10",
+                          : "border-white/10 bg-white/[0.035] hover:bg-white/10",
                       ].join(" ")}
                     >
                       <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-white/10">
@@ -485,7 +510,7 @@ export function ListenTrackPage() {
             )}
 
             {activeTab === "lyrics" && (
-              <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-5 backdrop-blur">
                 {lyrics ? (
                   <pre className="whitespace-pre-wrap font-sans text-sm leading-7 text-slate-200">
                     {lyrics}
@@ -507,7 +532,7 @@ export function ListenTrackPage() {
             {activeTab === "related" && (
               <div className="grid gap-2">
                 {relatedTracks.length === 0 ? (
-                  <div className="rounded-2xl border border-white/10 bg-black/20 p-6 text-center">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-6 text-center backdrop-blur">
                     <Sparkles className="mx-auto h-10 w-10 text-slate-500" />
                     <p className="mt-4 text-sm font-bold text-white">
                       Nenhuma música relacionada
@@ -520,15 +545,14 @@ export function ListenTrackPage() {
                 ) : (
                   relatedTracks.map((item) => {
                     const cover = getTrackCover(item);
+                    const nextQueue = buildRandomQueue(item, allTracks);
 
                     return (
                       <button
                         key={item.id}
                         type="button"
-                        onClick={() =>
-                          handlePlayFromList(item, [playerTrack, ...relatedTracks])
-                        }
-                        className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 text-left transition hover:bg-white/10"
+                        onClick={() => handlePlayFromList(item, nextQueue)}
+                        className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3 text-left transition hover:bg-white/10"
                       >
                         <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-white/10">
                           {cover ? (

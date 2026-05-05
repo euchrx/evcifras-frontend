@@ -119,15 +119,15 @@ function getTrackPlayCount(track: AudioTrack) {
   );
 }
 
-function getTrackTitle(track: AudioTrack) {
+function getTrackTitle(track: AudioTrack | GlobalAudioTrack) {
   return track.song?.title || track.title || "Música";
 }
 
-function getTrackArtist(track: AudioTrack) {
+function getTrackArtist(track: AudioTrack | GlobalAudioTrack) {
   return track.song?.artist?.name || "Artista";
 }
 
-function getTrackCover(track: AudioTrack) {
+function getTrackCover(track: AudioTrack | GlobalAudioTrack) {
   return track.song?.artist?.imageUrl || "";
 }
 
@@ -156,15 +156,28 @@ function getAlbumGroups(tracks: AudioTrack[]) {
   return Array.from(map.values()).slice(0, 18);
 }
 
+function shuffleTracks<T>(items: T[]) {
+  const copy = [...items];
+
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    [copy[index], copy[randomIndex]] = [copy[randomIndex], copy[index]];
+  }
+
+  return copy;
+}
+
+function buildRandomQueue(track: AudioTrack, source: AudioTrack[]) {
+  const withoutCurrent = source.filter((item) => item.id !== track.id);
+  const randomTracks = shuffleTracks(withoutCurrent).slice(0, 24);
+
+  return [track, ...randomTracks];
+}
+
 export function ListenPage() {
   const [searchParams] = useSearchParams();
 
-  const {
-    currentTrack,
-    isPlaying,
-    playTrack,
-    setIsPlaying,
-  } = useAudioPlayer();
+  const { currentTrack, isPlaying, playTrack, setIsPlaying } = useAudioPlayer();
 
   const [tracks, setTracks] = useState<AudioTrack[]>([]);
   const [search, setSearch] = useState(() => searchParams.get("q") || "");
@@ -253,17 +266,13 @@ export function ListenPage() {
 
       if (typeof nextPlayCount === "number") {
         updateTrackPlayCount(trackId, nextPlayCount);
-        return;
       }
-
-      const current = tracks.find((track) => track.id === trackId);
-      updateTrackPlayCount(trackId, getTrackPlayCount(current as AudioTrack) + 1);
     } catch {
-      // Se falhar, não incrementa localmente para não criar contagem falsa.
+      // Mantém a contagem real: se o backend falhar, não cria número falso.
     }
   }
 
-  function handlePlayTrack(track: AudioTrack, queue: AudioTrack[]) {
+  function handlePlayTrack(track: AudioTrack) {
     const isCurrent = currentTrack?.id === track.id;
 
     if (isCurrent) {
@@ -271,7 +280,10 @@ export function ListenPage() {
       return;
     }
 
-    playTrack(track, queue);
+    const source = filteredTracks.length > 0 ? filteredTracks : tracks;
+    const randomQueue = buildRandomQueue(track, source);
+
+    playTrack(track, randomQueue);
     void registerStream(track.id);
   }
 
@@ -374,7 +386,6 @@ export function ListenPage() {
                     key={track.id}
                     track={track}
                     index={index}
-                    queue={filteredTracks}
                     currentTrackId={currentTrack?.id}
                     isPlaying={isPlaying}
                     onPlayTrack={handlePlayTrack}
@@ -388,7 +399,6 @@ export function ListenPage() {
             <TrackCarousel
               title="Playbacks"
               tracks={playbackTracks}
-              queue={filteredTracks}
               currentTrackId={currentTrack?.id}
               isPlaying={isPlaying}
               onPlayTrack={handlePlayTrack}
@@ -399,7 +409,6 @@ export function ListenPage() {
             <TrackCarousel
               title="Guias"
               tracks={guideTracks}
-              queue={filteredTracks}
               currentTrackId={currentTrack?.id}
               isPlaying={isPlaying}
               onPlayTrack={handlePlayTrack}
@@ -424,7 +433,6 @@ export function ListenPage() {
                     key={track.id}
                     track={track}
                     index={index}
-                    queue={filteredTracks}
                     currentTrackId={currentTrack?.id}
                     isPlaying={isPlaying}
                     onPlayTrack={handlePlayTrack}
@@ -470,7 +478,7 @@ function AlbumTouchCard({
   onPlayTrack,
 }: {
   album: AlbumGroup;
-  onPlayTrack: (track: AudioTrack, queue: AudioTrack[]) => void;
+  onPlayTrack: (track: AudioTrack) => void;
 }) {
   const firstTrack = album.tracks[0];
 
@@ -479,7 +487,7 @@ function AlbumTouchCard({
       return;
     }
 
-    onPlayTrack(firstTrack, album.tracks);
+    onPlayTrack(firstTrack);
   }
 
   return (
@@ -528,17 +536,15 @@ function AlbumTouchCard({
 function FloatingTrackRow({
   track,
   index,
-  queue,
   currentTrackId,
   isPlaying,
   onPlayTrack,
 }: {
   track: AudioTrack;
   index: number;
-  queue: AudioTrack[];
   currentTrackId?: string;
   isPlaying: boolean;
-  onPlayTrack: (track: AudioTrack, queue: AudioTrack[]) => void;
+  onPlayTrack: (track: AudioTrack) => void;
 }) {
   const cover = getTrackCover(track);
   const isCurrent = currentTrackId === track.id;
@@ -547,11 +553,11 @@ function FloatingTrackRow({
     <article
       role="button"
       tabIndex={0}
-      onClick={() => onPlayTrack(track, queue)}
+      onClick={() => onPlayTrack(track)}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          onPlayTrack(track, queue);
+          onPlayTrack(track);
         }
       }}
       className="group flex cursor-pointer items-center gap-3 rounded-[1.5rem] border border-transparent bg-white/[0.035] p-3 outline-none backdrop-blur transition hover:border-white/10 hover:bg-white/[0.075] active:scale-[0.99]"
@@ -599,17 +605,15 @@ function FloatingTrackRow({
 function TrackCarousel({
   title,
   tracks,
-  queue,
   currentTrackId,
   isPlaying,
   onPlayTrack,
 }: {
   title: string;
   tracks: AudioTrack[];
-  queue: AudioTrack[];
   currentTrackId?: string;
   isPlaying: boolean;
-  onPlayTrack: (track: AudioTrack, queue: AudioTrack[]) => void;
+  onPlayTrack: (track: AudioTrack) => void;
 }) {
   return (
     <section>
@@ -625,11 +629,11 @@ function TrackCarousel({
               key={track.id}
               role="button"
               tabIndex={0}
-              onClick={() => onPlayTrack(track, queue)}
+              onClick={() => onPlayTrack(track)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
-                  onPlayTrack(track, queue);
+                  onPlayTrack(track);
                 }
               }}
               className="group w-44 shrink-0 cursor-pointer rounded-[1.75rem] border border-transparent bg-white/[0.035] p-3 outline-none transition hover:border-white/10 hover:bg-white/[0.075] active:scale-[0.99]"
@@ -672,17 +676,15 @@ function TrackCarousel({
 function JukeboxRow({
   track,
   index,
-  queue,
   currentTrackId,
   isPlaying,
   onPlayTrack,
 }: {
   track: AudioTrack;
   index: number;
-  queue: AudioTrack[];
   currentTrackId?: string;
   isPlaying: boolean;
-  onPlayTrack: (track: AudioTrack, queue: AudioTrack[]) => void;
+  onPlayTrack: (track: AudioTrack) => void;
 }) {
   const cover = getTrackCover(track);
   const plays = formatPlays(getTrackPlayCount(track));
@@ -692,11 +694,11 @@ function JukeboxRow({
     <div
       role="button"
       tabIndex={0}
-      onClick={() => onPlayTrack(track, queue)}
+      onClick={() => onPlayTrack(track)}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          onPlayTrack(track, queue);
+          onPlayTrack(track);
         }
       }}
       className="group grid cursor-pointer grid-cols-[48px_1fr_72px] items-center gap-3 px-4 py-3 outline-none transition hover:bg-white/[0.06] active:bg-white/[0.08] md:grid-cols-[56px_1fr_80px]"

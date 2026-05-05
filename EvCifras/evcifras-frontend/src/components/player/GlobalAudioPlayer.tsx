@@ -9,6 +9,7 @@ import {
   SkipBack,
   SkipForward,
   Volume2,
+  VolumeX,
   X,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -94,7 +95,8 @@ export function GlobalAudioPlayer() {
   const [favoriteIds, setFavoriteIds] = useState<string[]>(() =>
     getInitialFavoriteIds(),
   );
-  const [isHoveringPlayer, setIsHoveringPlayer] = useState(false);
+  const [isHoveringVolume, setIsHoveringVolume] = useState(false);
+  const [lastVolumeBeforeMute, setLastVolumeBeforeMute] = useState(1);
 
   const mediaTrack = currentTrack;
 
@@ -202,13 +204,23 @@ export function GlobalAudioPlayer() {
     });
   }
 
+  function handleToggleMute(event: MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+
+    if (volume > 0) {
+      setLastVolumeBeforeMute(volume);
+      setVolumeValue(0);
+      return;
+    }
+
+    setVolumeValue(lastVolumeBeforeMute > 0 ? lastVolumeBeforeMute : 1);
+  }
+
   return (
     <div
       role="button"
       tabIndex={0}
       onClick={openListenTrackPage}
-      onMouseEnter={() => setIsHoveringPlayer(true)}
-      onMouseLeave={() => setIsHoveringPlayer(false)}
       onKeyDown={(event) => {
         if (event.key === "Enter") {
           openListenTrackPage();
@@ -292,24 +304,45 @@ export function GlobalAudioPlayer() {
           </div>
 
           <div className="flex items-center justify-end gap-2">
-            <div className="hidden items-center gap-3 lg:flex">
-              <Volume2 className="h-6 w-6 text-slate-400" />
+            <div
+              className="hidden items-center gap-3 lg:flex"
+              onMouseEnter={() => setIsHoveringVolume(true)}
+              onMouseLeave={() => setIsHoveringVolume(false)}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={handleToggleMute}
+                className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-white"
+                title={volume > 0 ? "Mutar" : "Ativar som"}
+              >
+                {volume > 0 ? (
+                  <Volume2 className="h-7 w-7" />
+                ) : (
+                  <VolumeX className="h-7 w-7" />
+                )}
+              </button>
 
               <div
                 className={[
                   "overflow-hidden transition-all duration-300",
-                  isHoveringPlayer ? "w-32 opacity-100" : "w-0 opacity-0",
+                  isHoveringVolume ? "w-32 opacity-100" : "w-0 opacity-0",
                 ].join(" ")}
-                onClick={(event) => event.stopPropagation()}
               >
                 <input
                   type="range"
                   min="0"
                   max="100"
                   value={Math.round(volume * 100)}
-                  onChange={(event) =>
-                    setVolumeValue(Number(event.target.value) / 100)
-                  }
+                  onChange={(event) => {
+                    const nextVolume = Number(event.target.value) / 100;
+
+                    if (nextVolume > 0) {
+                      setLastVolumeBeforeMute(nextVolume);
+                    }
+
+                    setVolumeValue(nextVolume);
+                  }}
                   className="w-32 cursor-pointer accent-violet-500"
                   aria-label="Volume"
                 />

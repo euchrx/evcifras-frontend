@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import {
   ArrowLeft,
   FileText,
@@ -209,9 +214,14 @@ function getActiveLyricIndex(items: SyncedLyricItem[], currentTime: number) {
   return activeIndex;
 }
 
+function isValidPlayerTab(value: string | null): value is PlayerTab {
+  return value === "queue" || value === "lyrics" || value === "related";
+}
+
 export function ListenTrackPage() {
   const { trackId } = useParams<{ trackId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const {
     currentTrack,
@@ -225,7 +235,15 @@ export function ListenTrackPage() {
 
   const [track, setTrack] = useState<AudioTrack | null>(null);
   const [allTracks, setAllTracks] = useState<AudioTrack[]>([]);
-  const [activeTab, setActiveTab] = useState<PlayerTab>("queue");
+  const [activeTab, setActiveTab] = useState<PlayerTab>(() => {
+    const tab = searchParams.get("tab");
+
+    if (isValidPlayerTab(tab)) {
+      return tab;
+    }
+
+    return "queue";
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -289,6 +307,7 @@ export function ListenTrackPage() {
     }
 
     const source = allTracks.length > 0 ? allTracks : [playerTrack];
+
     return buildRandomQueue(playerTrack, source);
   }, [allTracks, playerTrack]);
 
@@ -327,6 +346,14 @@ export function ListenTrackPage() {
       behavior: "smooth",
     });
   }, [activeLyricIndex]);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+
+    if (isValidPlayerTab(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (activeTab === "lyrics") {
@@ -373,7 +400,7 @@ export function ListenTrackPage() {
             },
           };
         } catch {
-          // Mantém os dados atuais.
+          // Mantém os dados atuais caso a rota pública não retorne letra.
         }
       }
 
@@ -453,6 +480,7 @@ export function ListenTrackPage() {
     }
 
     const nextQueue = suggestedQueue.length > 0 ? suggestedQueue : [playerTrack];
+
     playTrack(playerTrack, nextQueue);
   }
 
@@ -462,6 +490,20 @@ export function ListenTrackPage() {
   ) {
     playTrack(nextTrack, nextQueue);
     navigate(`/ouvir/${nextTrack.id}`);
+  }
+
+  function handleSelectTab(nextTab: PlayerTab) {
+    setActiveTab(nextTab);
+
+    if (trackId) {
+      navigate(`/ouvir/${trackId}?tab=${nextTab}`, { replace: true });
+    }
+
+    if (nextTab === "lyrics") {
+      window.setTimeout(() => {
+        focusActiveLyric();
+      }, 120);
+    }
   }
 
   if (loading) {
@@ -548,7 +590,7 @@ export function ListenTrackPage() {
           <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
-              onClick={() => setActiveTab("queue")}
+              onClick={() => handleSelectTab("queue")}
               className={[
                 "inline-flex h-11 items-center justify-center gap-2 rounded-2xl px-3 text-xs font-black transition",
                 activeTab === "queue"
@@ -562,13 +604,7 @@ export function ListenTrackPage() {
 
             <button
               type="button"
-              onClick={() => {
-                setActiveTab("lyrics");
-
-                window.setTimeout(() => {
-                  focusActiveLyric();
-                }, 120);
-              }}
+              onClick={() => handleSelectTab("lyrics")}
               className={[
                 "inline-flex h-11 items-center justify-center gap-2 rounded-2xl px-3 text-xs font-black transition",
                 activeTab === "lyrics"
@@ -582,7 +618,7 @@ export function ListenTrackPage() {
 
             <button
               type="button"
-              onClick={() => setActiveTab("related")}
+              onClick={() => handleSelectTab("related")}
               className={[
                 "inline-flex h-11 items-center justify-center gap-2 rounded-2xl px-3 text-xs font-black transition",
                 activeTab === "related"
@@ -597,7 +633,7 @@ export function ListenTrackPage() {
 
           <div className="mt-5 h-[calc(100%-4rem)] overflow-hidden">
             {activeTab === "queue" && (
-              <div className="scrollbar-hide grid h-full gap-2 overflow-y-auto pr-1">
+              <div className="scrollbar-hide flex h-full flex-col gap-2 overflow-y-auto overflow-x-hidden pr-1">
                 {effectiveQueue.map((item, index) => {
                   const isCurrent = currentTrack?.id === item.id;
                   const cover = getTrackCover(item);
@@ -608,7 +644,7 @@ export function ListenTrackPage() {
                       type="button"
                       onClick={() => handleSelectTrack(item, effectiveQueue)}
                       className={[
-                        "flex items-center gap-3 rounded-2xl border p-3 text-left transition",
+                        "flex min-h-[72px] shrink-0 items-center gap-3 rounded-2xl border p-3 text-left transition",
                         isCurrent
                           ? "border-violet-400/30 bg-violet-500/15"
                           : "border-white/10 bg-white/[0.035] hover:bg-white/10",
@@ -699,9 +735,9 @@ export function ListenTrackPage() {
             )}
 
             {activeTab === "related" && (
-              <div className="scrollbar-hide grid h-full gap-2 overflow-y-auto pr-1">
+              <div className="scrollbar-hide flex h-full flex-col gap-2 overflow-y-auto overflow-x-hidden pr-1">
                 {relatedTracks.length === 0 ? (
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-6 text-center">
+                  <div className="shrink-0 rounded-2xl border border-white/10 bg-white/[0.035] p-6 text-center">
                     <Sparkles className="mx-auto h-10 w-10 text-slate-500" />
                     <p className="mt-4 text-sm font-bold text-white">
                       Nenhuma música relacionada
@@ -721,7 +757,7 @@ export function ListenTrackPage() {
                         key={item.id}
                         type="button"
                         onClick={() => handleSelectTrack(item, nextQueue)}
-                        className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3 text-left transition hover:bg-white/10"
+                        className="flex min-h-[72px] shrink-0 items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3 text-left transition hover:bg-white/10"
                       >
                         <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-white/10">
                           {cover ? (
@@ -746,7 +782,7 @@ export function ListenTrackPage() {
                           </p>
                         </div>
 
-                        <Play className="h-4 w-4 text-slate-500" />
+                        <Play className="h-4 w-4 shrink-0 text-slate-500" />
                       </button>
                     );
                   })

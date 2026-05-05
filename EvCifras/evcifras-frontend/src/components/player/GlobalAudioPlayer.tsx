@@ -1,7 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import {
-  ChevronDown,
-  ChevronUp,
   ListMusic,
   Music2,
   Pause,
@@ -45,14 +43,12 @@ export function GlobalAudioPlayer() {
     currentTrack,
     queue,
     isPlaying,
-    isExpanded,
     duration,
     currentTime,
     volume,
     progress,
     playTrack,
     setIsPlaying,
-    setIsExpanded,
     seekToPercent,
     setVolumeValue,
     playNext,
@@ -60,13 +56,7 @@ export function GlobalAudioPlayer() {
     closePlayer,
   } = useAudioPlayer();
 
-  const [showQueue, setShowQueue] = useState(false);
-
   const mediaTrack = currentTrack;
-
-  const artistName = mediaTrack ? getTrackArtist(mediaTrack) : "Artista";
-  const songTitle = mediaTrack ? getTrackTitle(mediaTrack) : "Música";
-  const imageUrl = mediaTrack ? getTrackCover(mediaTrack) : "";
 
   useEffect(() => {
     if (!mediaTrack || !("mediaSession" in navigator)) {
@@ -117,6 +107,9 @@ export function GlobalAudioPlayer() {
   }
 
   const activeTrack = mediaTrack;
+  const artistName = getTrackArtist(activeTrack);
+  const songTitle = getTrackTitle(activeTrack);
+  const imageUrl = getTrackCover(activeTrack);
 
   function handleMainPlayButton() {
     if (!isPlaying) {
@@ -124,6 +117,10 @@ export function GlobalAudioPlayer() {
     }
 
     setIsPlaying(!isPlaying);
+  }
+
+  function handleOpenQueue() {
+    navigate(`/ouvir/${activeTrack.id}?tab=queue`);
   }
 
   return (
@@ -223,24 +220,11 @@ export function GlobalAudioPlayer() {
 
             <button
               type="button"
-              onClick={() => setShowQueue((current) => !current)}
+              onClick={handleOpenQueue}
               className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10"
               title="Fila"
             >
               <ListMusic className="h-4 w-4" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10"
-              title="Expandir"
-            >
-              {isExpanded ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronUp className="h-4 w-4" />
-              )}
             </button>
 
             <button
@@ -253,61 +237,6 @@ export function GlobalAudioPlayer() {
             </button>
           </div>
         </div>
-
-        {showQueue && queue.length > 0 && (
-          <div className="scrollbar-hide mt-3 max-h-64 overflow-y-auto rounded-2xl border border-white/10 bg-black/40 p-3">
-            <div className="grid gap-2">
-              {queue.map((track, index) => {
-                const isCurrent = track.id === activeTrack.id;
-                const cover = getTrackCover(track);
-
-                return (
-                  <button
-                    key={`${track.id}-${index}`}
-                    type="button"
-                    onClick={() => {
-                      playTrack(track, queue);
-                      navigate(`/ouvir/${track.id}`);
-                    }}
-                    className={[
-                      "flex items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
-                      isCurrent
-                        ? "border-violet-400/30 bg-violet-500/15 text-violet-100"
-                        : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10",
-                    ].join(" ")}
-                  >
-                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-white/10">
-                      {cover ? (
-                        <img
-                          src={cover}
-                          alt={getTrackArtist(track)}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-violet-200">
-                          <Music2 className="h-4 w-4" />
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-bold">
-                        {getTrackTitle(track)}
-                      </p>
-                      <p className="truncate text-xs text-slate-500">
-                        {getTrackArtist(track)}
-                      </p>
-                    </div>
-
-                    {isCurrent && isPlaying && (
-                      <Pause className="h-4 w-4 text-violet-200" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

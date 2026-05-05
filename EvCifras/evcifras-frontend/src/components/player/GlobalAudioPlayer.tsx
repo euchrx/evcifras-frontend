@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import type { MouseEvent } from "react";
 import {
   Heart,
   ListMusic,
@@ -149,16 +150,13 @@ export function GlobalAudioPlayer() {
   const artistName = getTrackArtist(activeTrack);
   const songTitle = getTrackTitle(activeTrack);
   const imageUrl = getTrackCover(activeTrack);
-
-  const isFavorite = useMemo(() => {
-    return favoriteIds.includes(activeTrack.id);
-  }, [favoriteIds, activeTrack.id]);
+  const isFavorite = favoriteIds.includes(activeTrack.id);
 
   function openListenTrackPage() {
     navigate(`/ouvir/${activeTrack.id}`);
   }
 
-  function handleMainPlayButton(event: React.MouseEvent<HTMLButtonElement>) {
+  function handleMainPlayButton(event: MouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
 
     if (!isPlaying) {
@@ -168,27 +166,27 @@ export function GlobalAudioPlayer() {
     setIsPlaying(!isPlaying);
   }
 
-  function handlePrevious(event: React.MouseEvent<HTMLButtonElement>) {
+  function handlePrevious(event: MouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
     playPrevious();
   }
 
-  function handleNext(event: React.MouseEvent<HTMLButtonElement>) {
+  function handleNext(event: MouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
     playNext();
   }
 
-  function handleOpenQueue(event: React.MouseEvent<HTMLButtonElement>) {
+  function handleOpenQueue(event: MouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
     navigate(`/ouvir/${activeTrack.id}?tab=queue`);
   }
 
-  function handleClose(event: React.MouseEvent<HTMLButtonElement>) {
+  function handleClose(event: MouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
     closePlayer();
   }
 
-  function handleFavorite(event: React.MouseEvent<HTMLButtonElement>) {
+  function handleFavorite(event: MouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
 
     setFavoriteIds((current) => {
@@ -300,9 +298,7 @@ export function GlobalAudioPlayer() {
               <div
                 className={[
                   "overflow-hidden transition-all duration-300",
-                  isHoveringPlayer
-                    ? "w-32 opacity-100"
-                    : "w-0 opacity-0",
+                  isHoveringPlayer ? "w-32 opacity-100" : "w-0 opacity-0",
                 ].join(" ")}
                 onClick={(event) => event.stopPropagation()}
               >
@@ -332,10 +328,9 @@ export function GlobalAudioPlayer() {
               title={isFavorite ? "Remover dos favoritos" : "Favoritar"}
             >
               <Heart
-                className={[
-                  "h-5 w-5",
-                  isFavorite ? "fill-current" : "",
-                ].join(" ")}
+                className={["h-5 w-5", isFavorite ? "fill-current" : ""].join(
+                  " ",
+                )}
               />
             </button>
 

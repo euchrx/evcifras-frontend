@@ -135,7 +135,6 @@ function buildRandomQueue(track: GlobalAudioTrack, source: GlobalAudioTrack[]) {
 function parseLrcLyrics(rawLyrics: string) {
   const lines = rawLyrics.split(/\r?\n/);
   const parsed: SyncedLyricItem[] = [];
-
   const timeRegex = /\[(\d{1,2}):(\d{2})(?:\.(\d{1,2}))?\]/g;
 
   for (const line of lines) {
@@ -230,6 +229,7 @@ export function ListenTrackPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const lyricsContainerRef = useRef<HTMLDivElement | null>(null);
   const activeLyricRef = useRef<HTMLDivElement | null>(null);
 
   const playerTrack = useMemo<GlobalAudioTrack | null>(() => {
@@ -309,13 +309,23 @@ export function ListenTrackPage() {
   }, [queue, suggestedQueue, playerTrack]);
 
   useEffect(() => {
-    if (activeLyricRef.current) {
-      activeLyricRef.current.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-        inline: "nearest",
-      });
+    const container = lyricsContainerRef.current;
+    const activeElement = activeLyricRef.current;
+
+    if (!container || !activeElement || activeLyricIndex < 0) {
+      return;
     }
+
+    const targetTop =
+      activeElement.offsetTop -
+      container.clientHeight / 2 +
+      activeElement.clientHeight / 2 -
+      24;
+
+    container.scrollTo({
+      top: Math.max(targetTop, 0),
+      behavior: "smooth",
+    });
   }, [activeLyricIndex]);
 
   const loadTrack = useCallback(async () => {
@@ -342,11 +352,7 @@ export function ListenTrackPage() {
         nextTrack.song?.content ||
         nextTrack.description;
 
-      if (
-        !hasLyrics &&
-        nextTrack.song?.artist?.slug &&
-        nextTrack.song?.slug
-      ) {
+      if (!hasLyrics && nextTrack.song?.artist?.slug && nextTrack.song?.slug) {
         try {
           const songResponse = await api.get<PublicSongResponse>(
             `/songs/${nextTrack.song.artist.slug}/${nextTrack.song.slug}`,
@@ -361,7 +367,7 @@ export function ListenTrackPage() {
             },
           };
         } catch {
-          // Se a rota pública falhar, mantém os dados atuais.
+          // mantém os dados atuais
         }
       }
 
@@ -389,7 +395,6 @@ export function ListenTrackPage() {
     }
 
     const nextQueue = suggestedQueue.length > 0 ? suggestedQueue : [playerTrack];
-
     playTrack(playerTrack, nextQueue);
   }
 
@@ -596,9 +601,12 @@ export function ListenTrackPage() {
             )}
 
             {activeTab === "lyrics" && (
-              <div className="max-h-[650px] overflow-y-auto pr-2 scrollbar-hide">
+              <div
+                ref={lyricsContainerRef}
+                className="scrollbar-hide max-h-[650px] overflow-y-auto pr-2"
+              >
                 {lyricsTimeline.length > 0 ? (
-                  <div className="space-y-6 pb-24 pt-16">
+                  <div className="space-y-5 pb-32 pt-28">
                     {lyricsTimeline.map((item, index) => {
                       const isActive = index === activeLyricIndex;
                       const isPast = index < activeLyricIndex;
@@ -608,9 +616,9 @@ export function ListenTrackPage() {
                           key={`${item.time}-${index}`}
                           ref={isActive ? activeLyricRef : null}
                           className={[
-                            "transition-all duration-500",
+                            "py-2 transition-all duration-500",
                             isActive
-                              ? "scale-[1.02] text-white opacity-100"
+                              ? "text-white opacity-100"
                               : isPast
                                 ? "text-slate-500 opacity-60"
                                 : "text-slate-400 opacity-80",
@@ -618,10 +626,10 @@ export function ListenTrackPage() {
                         >
                           <p
                             className={[
-                              "whitespace-pre-wrap font-black leading-tight",
+                              "whitespace-pre-wrap font-black tracking-tight",
                               isActive
-                                ? "text-3xl md:text-4xl"
-                                : "text-xl md:text-2xl",
+                                ? "text-3xl leading-[1.18] md:text-4xl md:leading-[1.14]"
+                                : "text-xl leading-[1.22] md:text-2xl md:leading-[1.18]",
                             ].join(" ")}
                           >
                             {item.text}

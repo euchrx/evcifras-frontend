@@ -81,8 +81,10 @@ export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [listenSearch, setListenSearch] = useState("");
 
-  const isListenRoute =
+  const isListenHeaderRoute =
     location.pathname === "/ouvir" || location.pathname.startsWith("/ouvir/");
+
+  const isListenTrackRoute = /^\/ouvir\/[^/]+/.test(location.pathname);
 
   const navItems: NavItem[] = [
     {
@@ -163,7 +165,12 @@ export function AppLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-[#070A12] pb-28 text-white">
+    <div
+      className={[
+        "min-h-screen bg-[#070A12] text-white",
+        isListenTrackRoute ? "overflow-hidden" : "pb-28",
+      ].join(" ")}
+    >
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute left-[-10%] top-[-10%] h-80 w-80 rounded-full bg-violet-500/20 blur-3xl" />
         <div className="absolute right-[-10%] top-[20%] h-96 w-96 rounded-full bg-blue-500/10 blur-3xl" />
@@ -184,9 +191,17 @@ export function AppLayout() {
                 className="h-18 w-auto object-contain"
               />
             </div>
+
+            <div className="md:hidden">
+              <img
+                src="/logo.png"
+                alt="EvCifras"
+                className="h-12 w-auto object-contain"
+              />
+            </div>
           </Link>
 
-          {isListenRoute ? (
+          {isListenHeaderRoute ? (
             <form
               onSubmit={handleListenSearchSubmit}
               className="flex min-w-0 flex-1 justify-center"
@@ -223,8 +238,9 @@ export function AppLayout() {
                   <>
                     <div
                       className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-sm font-black text-white"
-                      title={`${user?.name || "Usuário"} • ${user?.role || ""
-                        }`}
+                      title={`${user?.name || "Usuário"} • ${
+                        user?.role || ""
+                      }`}
                     >
                       {user?.name?.charAt(0)?.toUpperCase() || "U"}
                     </div>
@@ -277,7 +293,7 @@ export function AppLayout() {
           )}
         </div>
 
-        {!isListenRoute && mobileOpen && (
+        {!isListenHeaderRoute && mobileOpen && (
           <div className="border-t border-white/10 bg-[#070A12]/95 px-4 py-4 backdrop-blur-xl lg:hidden">
             <nav className="mx-auto grid max-w-7xl gap-2">
               {visibleNavItems.map((item) => (
@@ -340,19 +356,28 @@ export function AppLayout() {
         )}
       </header>
 
-      <main className="relative z-10 mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-10">
+      <main
+        className={[
+          "relative z-10 mx-auto max-w-7xl px-4 md:px-6",
+          isListenTrackRoute
+            ? "h-[calc(100vh-5rem)] overflow-hidden py-6"
+            : "py-8 md:py-10",
+        ].join(" ")}
+      >
         <Outlet />
       </main>
 
-      <footer className="relative z-10 border-t border-white/10">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-8 text-sm text-slate-500 md:flex-row md:items-center md:justify-between md:px-6">
-          <p>
-            © {new Date().getFullYear()} EvCifras. Todos os direitos
-            reservados.
-          </p>
-          <p>Uma plataforma EvSystem para músicos.</p>
-        </div>
-      </footer>
+      {!isListenHeaderRoute && (
+        <footer className="relative z-10 border-t border-white/10">
+          <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-8 text-sm text-slate-500 md:flex-row md:items-center md:justify-between md:px-6">
+            <p>
+              © {new Date().getFullYear()} EvCifras. Todos os direitos
+              reservados.
+            </p>
+            <p>Uma plataforma EvSystem para músicos.</p>
+          </div>
+        </footer>
+      )}
 
       <GlobalAudioPlayer />
     </div>

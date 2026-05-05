@@ -6,25 +6,14 @@ import {
   Music2,
   Pause,
   Play,
-  RotateCcw,
-  RotateCw,
   SkipBack,
   SkipForward,
   Volume2,
   X,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAudioPlayer } from "../../contexts/AudioPlayerContext";
 import type { GlobalAudioTrack } from "../../contexts/AudioPlayerContext";
-
-const typeLabels: Record<string, string> = {
-  ORIGINAL: "Original",
-  PLAYBACK: "Playback",
-  GUIDE: "Guia",
-  LESSON: "Aula",
-  DEMO: "Demo",
-  OTHER: "Áudio",
-};
 
 function formatTime(seconds: number) {
   if (!Number.isFinite(seconds) || seconds < 0) {
@@ -38,7 +27,7 @@ function formatTime(seconds: number) {
 }
 
 function getTrackTitle(track: GlobalAudioTrack) {
-  return track.song?.title || track.title || "Áudio";
+  return track.song?.title || track.title || "Música";
 }
 
 function getTrackArtist(track: GlobalAudioTrack) {
@@ -50,6 +39,8 @@ function getTrackCover(track: GlobalAudioTrack) {
 }
 
 export function GlobalAudioPlayer() {
+  const navigate = useNavigate();
+
   const {
     currentTrack,
     queue,
@@ -63,7 +54,6 @@ export function GlobalAudioPlayer() {
     setIsPlaying,
     setIsExpanded,
     seekToPercent,
-    skipSeconds,
     setVolumeValue,
     playNext,
     playPrevious,
@@ -72,23 +62,25 @@ export function GlobalAudioPlayer() {
 
   const [showQueue, setShowQueue] = useState(false);
 
-  const artistName = currentTrack ? getTrackArtist(currentTrack) : "Artista";
-  const songTitle = currentTrack ? getTrackTitle(currentTrack) : "Áudio";
-  const imageUrl = currentTrack ? getTrackCover(currentTrack) : "";
+  const mediaTrack = currentTrack;
+
+  const artistName = mediaTrack ? getTrackArtist(mediaTrack) : "Artista";
+  const songTitle = mediaTrack ? getTrackTitle(mediaTrack) : "Música";
+  const imageUrl = mediaTrack ? getTrackCover(mediaTrack) : "";
 
   useEffect(() => {
-    if (!currentTrack || !("mediaSession" in navigator)) {
+    if (!mediaTrack || !("mediaSession" in navigator)) {
       return;
     }
 
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: songTitle,
-      artist: artistName,
+      title: getTrackTitle(mediaTrack),
+      artist: getTrackArtist(mediaTrack),
       album: "EvCifras",
-      artwork: imageUrl
+      artwork: getTrackCover(mediaTrack)
         ? [
             {
-              src: imageUrl,
+              src: getTrackCover(mediaTrack),
               sizes: "512x512",
               type: "image/png",
             },
@@ -112,35 +104,26 @@ export function GlobalAudioPlayer() {
       playNext();
     });
 
-    navigator.mediaSession.setActionHandler("seekbackward", () => {
-      skipSeconds(-10);
-    });
-
-    navigator.mediaSession.setActionHandler("seekforward", () => {
-      skipSeconds(10);
-    });
-
     return () => {
       navigator.mediaSession.setActionHandler("play", null);
       navigator.mediaSession.setActionHandler("pause", null);
       navigator.mediaSession.setActionHandler("previoustrack", null);
       navigator.mediaSession.setActionHandler("nexttrack", null);
-      navigator.mediaSession.setActionHandler("seekbackward", null);
-      navigator.mediaSession.setActionHandler("seekforward", null);
     };
-  }, [
-    currentTrack,
-    songTitle,
-    artistName,
-    imageUrl,
-    setIsPlaying,
-    playNext,
-    playPrevious,
-    skipSeconds,
-  ]);
+  }, [mediaTrack, setIsPlaying, playNext, playPrevious]);
 
-  if (!currentTrack) {
+  if (!mediaTrack) {
     return null;
+  }
+
+  const activeTrack = mediaTrack;
+
+  function handleMainPlayButton() {
+    if (!isPlaying) {
+      navigate(`/ouvir/${activeTrack.id}`);
+    }
+
+    setIsPlaying(!isPlaying);
   }
 
   return (
@@ -156,48 +139,13 @@ export function GlobalAudioPlayer() {
           aria-label="Progresso do áudio"
         />
 
-        <div className="flex items-center gap-3">
-          <Link
-            to={`/ouvir/${currentTrack.id}`}
-            className="h-12 w-12 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-violet-500/10 md:h-14 md:w-14"
-          >
-            {imageUrl ? (
-              <img
-                src={imageUrl}
-                alt={artistName}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-violet-200">
-                <Music2 className="h-5 w-5" />
-              </div>
-            )}
-          </Link>
-
-          <Link to={`/ouvir/${currentTrack.id}`} className="min-w-0 flex-1">
-            <p className="truncate text-sm font-black text-white md:text-base">
-              {songTitle}
-            </p>
-
-            <p className="truncate text-xs font-semibold text-violet-200">
-              {artistName}
-            </p>
-
-            <div className="mt-1 hidden items-center gap-2 text-xs text-slate-500 sm:flex">
-              <span>{formatTime(currentTime)}</span>
-              <span>/</span>
-              <span>{formatTime(duration || currentTrack.durationSec || 0)}</span>
-              <span>•</span>
-              <span>{typeLabels[currentTrack.type] || "Áudio"}</span>
-            </div>
-          </Link>
-
-          <div className="flex shrink-0 items-center gap-1">
+        <div className="grid items-center gap-3 md:grid-cols-[260px_1fr_260px]">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={playPrevious}
               disabled={queue.length <= 1}
-              className="hidden h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 sm:flex"
+              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
               title="Anterior"
             >
               <SkipBack className="h-4 w-4" />
@@ -205,16 +153,7 @@ export function GlobalAudioPlayer() {
 
             <button
               type="button"
-              onClick={() => skipSeconds(-10)}
-              className="hidden h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 md:flex"
-              title="Voltar 10s"
-            >
-              <RotateCcw className="h-4 w-4" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsPlaying(!isPlaying)}
+              onClick={handleMainPlayButton}
               className="flex h-12 w-12 items-center justify-center rounded-full bg-violet-500 text-white shadow-lg shadow-violet-950/40 transition hover:bg-violet-400"
               title={isPlaying ? "Pausar" : "Tocar"}
             >
@@ -227,44 +166,65 @@ export function GlobalAudioPlayer() {
 
             <button
               type="button"
-              onClick={() => skipSeconds(10)}
-              className="hidden h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 md:flex"
-              title="Avançar 10s"
-            >
-              <RotateCw className="h-4 w-4" />
-            </button>
-
-            <button
-              type="button"
               onClick={playNext}
               disabled={queue.length <= 1}
-              className="hidden h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40 sm:flex"
+              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
               title="Próxima"
             >
               <SkipForward className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="hidden w-32 items-center gap-2 lg:flex">
-            <Volume2 className="h-4 w-4 text-slate-500" />
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={Math.round(volume * 100)}
-              onChange={(event) =>
-                setVolumeValue(Number(event.target.value) / 100)
-              }
-              className="w-full accent-violet-500"
-              aria-label="Volume"
-            />
-          </div>
+          <Link
+            to={`/ouvir/${activeTrack.id}`}
+            className="mx-auto flex min-w-0 max-w-xl items-center justify-center gap-3 text-center"
+          >
+            <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-violet-500/10">
+              {imageUrl ? (
+                <img
+                  src={imageUrl}
+                  alt={artistName}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-violet-200">
+                  <Music2 className="h-4 w-4" />
+                </div>
+              )}
+            </div>
 
-          <div className="flex shrink-0 items-center gap-1">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-black text-white">
+                {songTitle}
+              </p>
+
+              <p className="truncate text-xs font-semibold text-violet-200">
+                {artistName} • {formatTime(currentTime)} /{" "}
+                {formatTime(duration || activeTrack.durationSec || 0)}
+              </p>
+            </div>
+          </Link>
+
+          <div className="flex items-center justify-end gap-2">
+            <div className="hidden w-28 items-center gap-2 lg:flex">
+              <Volume2 className="h-4 w-4 text-slate-500" />
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={Math.round(volume * 100)}
+                onChange={(event) =>
+                  setVolumeValue(Number(event.target.value) / 100)
+                }
+                className="w-full accent-violet-500"
+                aria-label="Volume"
+              />
+            </div>
+
             <button
               type="button"
               onClick={() => setShowQueue((current) => !current)}
-              className="hidden h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 sm:flex"
+              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10"
               title="Fila"
             >
               <ListMusic className="h-4 w-4" />
@@ -294,75 +254,21 @@ export function GlobalAudioPlayer() {
           </div>
         </div>
 
-        {isExpanded && (
-          <div className="mt-3 grid gap-3 border-t border-white/10 pt-3 md:hidden">
-            <div className="flex items-center justify-between text-xs font-semibold text-slate-400">
-              <span>{formatTime(currentTime)}</span>
-              <span>{formatTime(duration || currentTrack.durationSec || 0)}</span>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={playPrevious}
-                disabled={queue.length <= 1}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 text-sm font-bold text-white disabled:opacity-40"
-              >
-                <SkipBack className="h-4 w-4" />
-                Ant.
-              </button>
-
-              <Link
-                to={`/ouvir/${currentTrack.id}`}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 text-sm font-bold text-white"
-              >
-                Player
-              </Link>
-
-              <button
-                type="button"
-                onClick={playNext}
-                disabled={queue.length <= 1}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 text-sm font-bold text-white disabled:opacity-40"
-              >
-                Próx.
-                <SkipForward className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
-              <Volume2 className="h-4 w-4 text-slate-500" />
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={Math.round(volume * 100)}
-                onChange={(event) =>
-                  setVolumeValue(Number(event.target.value) / 100)
-                }
-                className="w-full accent-violet-500"
-                aria-label="Volume"
-              />
-            </div>
-          </div>
-        )}
-
         {showQueue && queue.length > 0 && (
-          <div className="mt-3 max-h-64 overflow-y-auto rounded-2xl border border-white/10 bg-black/40 p-3">
-            <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
-              Fila de reprodução
-            </p>
-
+          <div className="scrollbar-hide mt-3 max-h-64 overflow-y-auto rounded-2xl border border-white/10 bg-black/40 p-3">
             <div className="grid gap-2">
               {queue.map((track, index) => {
-                const isCurrent = track.id === currentTrack.id;
+                const isCurrent = track.id === activeTrack.id;
                 const cover = getTrackCover(track);
 
                 return (
                   <button
                     key={`${track.id}-${index}`}
                     type="button"
-                    onClick={() => playTrack(track, queue)}
+                    onClick={() => {
+                      playTrack(track, queue);
+                      navigate(`/ouvir/${track.id}`);
+                    }}
                     className={[
                       "flex items-center gap-3 rounded-xl border px-3 py-2 text-left transition",
                       isCurrent
@@ -386,7 +292,7 @@ export function GlobalAudioPlayer() {
 
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-bold">
-                        {index + 1}. {getTrackTitle(track)}
+                        {getTrackTitle(track)}
                       </p>
                       <p className="truncate text-xs text-slate-500">
                         {getTrackArtist(track)}

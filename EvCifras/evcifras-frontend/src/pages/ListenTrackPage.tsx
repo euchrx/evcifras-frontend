@@ -85,7 +85,7 @@ function getPlayableAudioUrl(audioUrl: string) {
 }
 
 function getTrackTitle(track: GlobalAudioTrack | AudioTrack) {
-  return track.song?.title || track.title || "Áudio";
+  return track.song?.title || track.title || "Música";
 }
 
 function getTrackArtist(track: GlobalAudioTrack | AudioTrack) {
@@ -308,7 +308,7 @@ export function ListenTrackPage() {
     return [];
   }, [queue, suggestedQueue, playerTrack]);
 
-  useEffect(() => {
+  const focusActiveLyric = useCallback(() => {
     const container = lyricsContainerRef.current;
     const activeElement = activeLyricRef.current;
 
@@ -327,6 +327,12 @@ export function ListenTrackPage() {
       behavior: "smooth",
     });
   }, [activeLyricIndex]);
+
+  useEffect(() => {
+    if (activeTab === "lyrics") {
+      focusActiveLyric();
+    }
+  }, [activeTab, activeLyricIndex, focusActiveLyric]);
 
   const loadTrack = useCallback(async () => {
     if (!trackId) {
@@ -367,7 +373,7 @@ export function ListenTrackPage() {
             },
           };
         } catch {
-          // mantém os dados atuais
+          // Mantém os dados atuais.
         }
       }
 
@@ -383,6 +389,58 @@ export function ListenTrackPage() {
   useEffect(() => {
     loadTrack();
   }, [loadTrack]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const isTyping =
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.tagName === "SELECT" ||
+        target?.isContentEditable;
+
+      if (isTyping) {
+        return;
+      }
+
+      if (event.code === "Space") {
+        event.preventDefault();
+
+        if (!playerTrack) {
+          return;
+        }
+
+        if (isCurrentTrack) {
+          setIsPlaying(!isPlaying);
+          return;
+        }
+
+        const nextQueue =
+          suggestedQueue.length > 0 ? suggestedQueue : [playerTrack];
+
+        playTrack(playerTrack, nextQueue);
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        navigate("/ouvir");
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [
+    playerTrack,
+    isCurrentTrack,
+    isPlaying,
+    setIsPlaying,
+    suggestedQueue,
+    playTrack,
+    navigate,
+  ]);
 
   function handlePlayCurrent() {
     if (!playerTrack) {
@@ -408,7 +466,7 @@ export function ListenTrackPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[70vh] items-center justify-center">
+      <div className="flex h-full items-center justify-center">
         <div className="flex items-center gap-3 rounded-3xl border border-white/10 bg-white/5 px-6 py-4 text-slate-300">
           <Loader2 className="h-5 w-5 animate-spin text-violet-300" />
           Carregando player...
@@ -446,7 +504,7 @@ export function ListenTrackPage() {
   const imageUrl = getTrackCover(track);
 
   return (
-    <div className="mx-auto max-w-7xl pb-40">
+    <div className="mx-auto h-full max-w-7xl overflow-hidden pb-28">
       <Link
         to="/ouvir"
         className="inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-white"
@@ -455,12 +513,12 @@ export function ListenTrackPage() {
         Voltar para ouvir
       </Link>
 
-      <section className="mt-8 grid gap-12 lg:grid-cols-[1fr_430px]">
-        <div className="flex min-h-[620px] flex-col items-center justify-start">
+      <section className="mt-6 grid h-[calc(100%-2rem)] gap-10 overflow-hidden lg:grid-cols-[1fr_430px]">
+        <div className="flex min-h-0 flex-col items-center justify-center overflow-hidden">
           <button
             type="button"
             onClick={handlePlayCurrent}
-            className="group block w-full max-w-[440px] text-center"
+            className="group block w-full max-w-[400px] text-center"
           >
             <div className="mx-auto aspect-square w-full overflow-hidden rounded-[2.5rem] shadow-2xl shadow-black/40 transition duration-300 group-hover:scale-[1.01]">
               {imageUrl ? (
@@ -477,34 +535,16 @@ export function ListenTrackPage() {
             </div>
           </button>
 
-          <p className="mt-7 text-center text-lg font-semibold text-violet-200">
+          <p className="mt-6 text-center text-lg font-semibold text-violet-200">
             {artistName}
           </p>
 
           <h1 className="mt-3 max-w-4xl text-center text-4xl font-black tracking-tight text-white md:text-6xl">
             {songTitle}
           </h1>
-
-          <button
-            type="button"
-            onClick={handlePlayCurrent}
-            className="mt-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/10"
-          >
-            {isCurrentTrack && isPlaying ? (
-              <>
-                <Pause className="h-4 w-4" />
-                Pausar
-              </>
-            ) : (
-              <>
-                <Play className="h-4 w-4 fill-white" />
-                Tocar agora
-              </>
-            )}
-          </button>
         </div>
 
-        <aside className="min-h-[620px]">
+        <aside className="min-h-0 overflow-hidden">
           <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
@@ -522,7 +562,13 @@ export function ListenTrackPage() {
 
             <button
               type="button"
-              onClick={() => setActiveTab("lyrics")}
+              onClick={() => {
+                setActiveTab("lyrics");
+
+                window.setTimeout(() => {
+                  focusActiveLyric();
+                }, 120);
+              }}
               className={[
                 "inline-flex h-11 items-center justify-center gap-2 rounded-2xl px-3 text-xs font-black transition",
                 activeTab === "lyrics"
@@ -549,9 +595,9 @@ export function ListenTrackPage() {
             </button>
           </div>
 
-          <div className="mt-5">
+          <div className="mt-5 h-[calc(100%-4rem)] overflow-hidden">
             {activeTab === "queue" && (
-              <div className="grid gap-2">
+              <div className="scrollbar-hide grid h-full gap-2 overflow-y-auto pr-1">
                 {effectiveQueue.map((item, index) => {
                   const isCurrent = currentTrack?.id === item.id;
                   const cover = getTrackCover(item);
@@ -584,7 +630,7 @@ export function ListenTrackPage() {
 
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-black text-white">
-                          {index + 1}. {getTrackTitle(item)}
+                          {getTrackTitle(item)}
                         </p>
                         <p className="mt-1 truncate text-xs font-semibold text-slate-400">
                           {getTrackArtist(item)}
@@ -603,7 +649,7 @@ export function ListenTrackPage() {
             {activeTab === "lyrics" && (
               <div
                 ref={lyricsContainerRef}
-                className="scrollbar-hide max-h-[650px] overflow-y-auto overflow-x-hidden px-4 pr-4 md:px-5"
+                className="scrollbar-hide h-full overflow-y-auto overflow-x-hidden px-4 pr-4 md:px-5"
               >
                 {lyricsTimeline.length > 0 ? (
                   <div className="space-y-5 pb-32 pt-8">
@@ -653,7 +699,7 @@ export function ListenTrackPage() {
             )}
 
             {activeTab === "related" && (
-              <div className="grid gap-2">
+              <div className="scrollbar-hide grid h-full gap-2 overflow-y-auto pr-1">
                 {relatedTracks.length === 0 ? (
                   <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-6 text-center">
                     <Sparkles className="mx-auto h-10 w-10 text-slate-500" />

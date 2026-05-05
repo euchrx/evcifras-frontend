@@ -47,7 +47,6 @@ export function GlobalAudioPlayer() {
     currentTime,
     volume,
     progress,
-    playTrack,
     setIsPlaying,
     seekToPercent,
     setVolumeValue,
@@ -69,12 +68,12 @@ export function GlobalAudioPlayer() {
       album: "EvCifras",
       artwork: getTrackCover(mediaTrack)
         ? [
-            {
-              src: getTrackCover(mediaTrack),
-              sizes: "512x512",
-              type: "image/png",
-            },
-          ]
+          {
+            src: getTrackCover(mediaTrack),
+            sizes: "512x512",
+            type: "image/png",
+          },
+        ]
         : [],
     });
 
@@ -174,7 +173,7 @@ export function GlobalAudioPlayer() {
 
           <Link
             to={`/ouvir/${activeTrack.id}`}
-            className="mx-auto flex min-w-0 max-w-xl items-center justify-center gap-3 text-center"
+            className="mx-auto flex min-w-0 max-w-xl items-center justify-start gap-3 text-left"
           >
             <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-violet-500/10">
               {imageUrl ? (
@@ -190,7 +189,7 @@ export function GlobalAudioPlayer() {
               )}
             </div>
 
-            <div className="min-w-0">
+            <div className="min-w-0 text-left">
               <p className="truncate text-sm font-black text-white">
                 {songTitle}
               </p>

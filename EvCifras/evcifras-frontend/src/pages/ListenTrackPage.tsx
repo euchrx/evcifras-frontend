@@ -606,7 +606,7 @@ export function ListenTrackPage() {
                 className="scrollbar-hide max-h-[650px] overflow-y-auto overflow-x-hidden px-4 pr-4 md:px-5"
               >
                 {lyricsTimeline.length > 0 ? (
-                  <div className="space-y-5 pb-32 pt-28">
+                  <div className="space-y-5 pb-32 pt-8">
                     {lyricsTimeline.map((item, index) => {
                       const isActive = index === activeLyricIndex;
                       const isPast = index < activeLyricIndex;

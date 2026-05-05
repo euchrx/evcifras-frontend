@@ -603,7 +603,7 @@ export function ListenTrackPage() {
             {activeTab === "lyrics" && (
               <div
                 ref={lyricsContainerRef}
-                className="scrollbar-hide max-h-[650px] overflow-y-auto pr-2"
+                className="scrollbar-hide max-h-[650px] overflow-y-auto overflow-x-hidden px-4 pr-4 md:px-5"
               >
                 {lyricsTimeline.length > 0 ? (
                   <div className="space-y-5 pb-32 pt-28">
@@ -626,7 +626,7 @@ export function ListenTrackPage() {
                         >
                           <p
                             className={[
-                              "whitespace-pre-wrap font-black tracking-tight",
+                              "whitespace-pre-wrap break-words font-black",
                               isActive
                                 ? "text-3xl leading-[1.18] md:text-4xl md:leading-[1.14]"
                                 : "text-xl leading-[1.22] md:text-2xl md:leading-[1.18]",

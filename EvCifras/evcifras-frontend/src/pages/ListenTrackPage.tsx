@@ -253,7 +253,10 @@ export function ListenTrackPage() {
   const rawLyrics = useMemo(() => getLyrics(track), [track]);
 
   const lyricsTimeline = useMemo(() => {
-    return buildLyricsTimeline(rawLyrics, currentDuration || track?.durationSec || 0);
+    return buildLyricsTimeline(
+      rawLyrics,
+      currentDuration || track?.durationSec || 0,
+    );
   }, [rawLyrics, currentDuration, track?.durationSec]);
 
   const activeLyricIndex = useMemo(() => {
@@ -310,6 +313,7 @@ export function ListenTrackPage() {
       activeLyricRef.current.scrollIntoView({
         behavior: "smooth",
         block: "center",
+        inline: "nearest",
       });
     }
   }, [activeLyricIndex]);
@@ -384,13 +388,15 @@ export function ListenTrackPage() {
       return;
     }
 
-    const nextQueue =
-      suggestedQueue.length > 0 ? suggestedQueue : [playerTrack];
+    const nextQueue = suggestedQueue.length > 0 ? suggestedQueue : [playerTrack];
 
     playTrack(playerTrack, nextQueue);
   }
 
-  function handleSelectTrack(nextTrack: GlobalAudioTrack, nextQueue: GlobalAudioTrack[]) {
+  function handleSelectTrack(
+    nextTrack: GlobalAudioTrack,
+    nextQueue: GlobalAudioTrack[],
+  ) {
     playTrack(nextTrack, nextQueue);
     navigate(`/ouvir/${nextTrack.id}`);
   }
@@ -590,9 +596,9 @@ export function ListenTrackPage() {
             )}
 
             {activeTab === "lyrics" && (
-              <div className="max-h-[650px] overflow-y-auto pr-2">
+              <div className="max-h-[650px] overflow-y-auto pr-2 scrollbar-hide">
                 {lyricsTimeline.length > 0 ? (
-                  <div className="space-y-6 py-6">
+                  <div className="space-y-6 pb-24 pt-16">
                     {lyricsTimeline.map((item, index) => {
                       const isActive = index === activeLyricIndex;
                       const isPast = index < activeLyricIndex;

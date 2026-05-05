@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   ArrowLeft,
-  Clock3,
   FileText,
   ListMusic,
   Loader2,
@@ -20,14 +19,6 @@ import {
   useAudioPlayer,
   type GlobalAudioTrack,
 } from "../contexts/AudioPlayerContext";
-
-type AudioTrackType =
-  | "ORIGINAL"
-  | "PLAYBACK"
-  | "GUIDE"
-  | "LESSON"
-  | "DEMO"
-  | "OTHER";
 
 type AudioTrack = GlobalAudioTrack & {
   status: "PUBLISHED";

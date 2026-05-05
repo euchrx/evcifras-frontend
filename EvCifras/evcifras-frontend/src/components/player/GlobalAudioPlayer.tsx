@@ -13,7 +13,7 @@ import {
   Volume2,
   X,
 } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAudioPlayer } from "../../contexts/AudioPlayerContext";
 import type { GlobalAudioTrack } from "../../contexts/AudioPlayerContext";
 
@@ -50,8 +50,6 @@ function getTrackCover(track: GlobalAudioTrack) {
 }
 
 export function GlobalAudioPlayer() {
-  const location = useLocation();
-
   const {
     currentTrack,
     queue,
@@ -73,8 +71,6 @@ export function GlobalAudioPlayer() {
   } = useAudioPlayer();
 
   const [showQueue, setShowQueue] = useState(false);
-
-  const hideVisualPlayer = /^\/ouvir\/[^/]+/.test(location.pathname);
 
   const artistName = currentTrack ? getTrackArtist(currentTrack) : "Artista";
   const songTitle = currentTrack ? getTrackTitle(currentTrack) : "Áudio";
@@ -143,7 +139,7 @@ export function GlobalAudioPlayer() {
     skipSeconds,
   ]);
 
-  if (!currentTrack || hideVisualPlayer) {
+  if (!currentTrack) {
     return null;
   }
 

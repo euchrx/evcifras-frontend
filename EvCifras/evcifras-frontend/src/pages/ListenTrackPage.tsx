@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   FileText,
@@ -8,13 +8,9 @@ import {
   Music2,
   Pause,
   Play,
-  RotateCcw,
-  RotateCw,
   Sparkles,
-  Volume2,
 } from "lucide-react";
 import { api } from "../services/api";
-import OfflineAudioButton from "../components/audio/OfflineAudioButton";
 import {
   useAudioPlayer,
   type GlobalAudioTrack,
@@ -22,11 +18,31 @@ import {
 
 type AudioTrack = GlobalAudioTrack & {
   status: "PUBLISHED";
+  playCount?: number;
+  playsCount?: number;
+  listenCount?: number;
+  totalPlays?: number;
   song?: GlobalAudioTrack["song"] & {
     lyrics?: string | null;
     lyric?: string | null;
     content?: string | null;
   };
+};
+
+type PublicSongResponse = {
+  id: string;
+  title: string;
+  slug: string;
+  content?: string | null;
+  lyrics?: string | null;
+  lyric?: string | null;
+  genre?: string | null;
+  artist?: {
+    id: string;
+    name: string;
+    slug: string;
+    imageUrl?: string | null;
+  } | null;
 };
 
 type ApiError = {
@@ -39,20 +55,14 @@ type ApiError = {
 
 type PlayerTab = "queue" | "lyrics" | "related";
 
+type SyncedLyricItem = {
+  time: number;
+  text: string;
+};
+
 function getApiErrorMessage(error: unknown, fallback: string) {
   const apiError = error as ApiError;
   return apiError.response?.data?.message || fallback;
-}
-
-function formatTime(seconds: number) {
-  if (!Number.isFinite(seconds) || seconds < 0) {
-    return "0:00";
-  }
-
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = Math.floor(seconds % 60);
-
-  return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
 }
 
 function getPlayableAudioUrl(audioUrl: string) {
@@ -90,7 +100,11 @@ function getTrackGenre(track: GlobalAudioTrack | AudioTrack) {
   return track.song?.genre || "";
 }
 
-function getLyrics(track: AudioTrack) {
+function getLyrics(track: AudioTrack | null) {
+  if (!track) {
+    return "";
+  }
+
   return (
     track.song?.lyrics ||
     track.song?.lyric ||
@@ -118,8 +132,87 @@ function buildRandomQueue(track: GlobalAudioTrack, source: GlobalAudioTrack[]) {
   return [track, ...randomTracks];
 }
 
+function parseLrcLyrics(rawLyrics: string) {
+  const lines = rawLyrics.split(/\r?\n/);
+  const parsed: SyncedLyricItem[] = [];
+
+  const timeRegex = /\[(\d{1,2}):(\d{2})(?:\.(\d{1,2}))?\]/g;
+
+  for (const line of lines) {
+    const matches = [...line.matchAll(timeRegex)];
+
+    if (matches.length === 0) {
+      continue;
+    }
+
+    const text = line.replace(timeRegex, "").trim();
+
+    for (const match of matches) {
+      const minutes = Number(match[1] || 0);
+      const seconds = Number(match[2] || 0);
+      const hundredths = Number(match[3] || 0);
+      const time = minutes * 60 + seconds + hundredths / 100;
+
+      parsed.push({
+        time,
+        text: text || "♪",
+      });
+    }
+  }
+
+  return parsed.sort((a, b) => a.time - b.time);
+}
+
+function buildEstimatedVerseLyrics(rawLyrics: string, durationSec: number) {
+  const verses = rawLyrics
+    .split(/\n\s*\n/)
+    .map((verse) => verse.trim())
+    .filter(Boolean);
+
+  if (verses.length === 0) {
+    return [];
+  }
+
+  const safeDuration = durationSec > 0 ? durationSec : verses.length * 8;
+  const slice = safeDuration / verses.length;
+
+  return verses.map((verse, index) => ({
+    time: index * slice,
+    text: verse,
+  }));
+}
+
+function buildLyricsTimeline(rawLyrics: string, durationSec: number) {
+  const lrc = parseLrcLyrics(rawLyrics);
+
+  if (lrc.length > 0) {
+    return lrc;
+  }
+
+  return buildEstimatedVerseLyrics(rawLyrics, durationSec);
+}
+
+function getActiveLyricIndex(items: SyncedLyricItem[], currentTime: number) {
+  if (items.length === 0) {
+    return -1;
+  }
+
+  let activeIndex = 0;
+
+  for (let index = 0; index < items.length; index += 1) {
+    if (currentTime >= items[index].time) {
+      activeIndex = index;
+    } else {
+      break;
+    }
+  }
+
+  return activeIndex;
+}
+
 export function ListenTrackPage() {
   const { trackId } = useParams<{ trackId: string }>();
+  const navigate = useNavigate();
 
   const {
     currentTrack,
@@ -127,13 +220,8 @@ export function ListenTrackPage() {
     isPlaying,
     duration,
     currentTime,
-    volume,
-    progress,
     playTrack,
     setIsPlaying,
-    seekToPercent,
-    skipSeconds,
-    setVolumeValue,
   } = useAudioPlayer();
 
   const [track, setTrack] = useState<AudioTrack | null>(null);
@@ -142,18 +230,7 @@ export function ListenTrackPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const artistName = track ? getTrackArtist(track) : "Artista";
-  const songTitle = track ? getTrackTitle(track) : "Áudio";
-  const imageUrl = track ? getTrackCover(track) : "";
-  const playableAudioUrl = track ? getPlayableAudioUrl(track.audioUrl) : "";
-
-  const isCurrentTrack = currentTrack?.id === track?.id;
-  const effectiveDuration = isCurrentTrack
-    ? duration || track?.durationSec || 0
-    : track?.durationSec || 0;
-  const effectiveCurrentTime = isCurrentTrack ? currentTime : 0;
-  const effectiveProgress = isCurrentTrack ? progress : 0;
-  const effectiveIsPlaying = isCurrentTrack && isPlaying;
+  const activeLyricRef = useRef<HTMLDivElement | null>(null);
 
   const playerTrack = useMemo<GlobalAudioTrack | null>(() => {
     if (!track) {
@@ -162,9 +239,26 @@ export function ListenTrackPage() {
 
     return {
       ...track,
-      audioUrl: playableAudioUrl,
+      audioUrl: getPlayableAudioUrl(track.audioUrl),
     };
-  }, [track, playableAudioUrl]);
+  }, [track]);
+
+  const isCurrentTrack = currentTrack?.id === track?.id;
+
+  const currentDisplayTime = isCurrentTrack ? currentTime : 0;
+  const currentDuration = isCurrentTrack
+    ? duration || track?.durationSec || 0
+    : track?.durationSec || 0;
+
+  const rawLyrics = useMemo(() => getLyrics(track), [track]);
+
+  const lyricsTimeline = useMemo(() => {
+    return buildLyricsTimeline(rawLyrics, currentDuration || track?.durationSec || 0);
+  }, [rawLyrics, currentDuration, track?.durationSec]);
+
+  const activeLyricIndex = useMemo(() => {
+    return getActiveLyricIndex(lyricsTimeline, currentDisplayTime);
+  }, [lyricsTimeline, currentDisplayTime]);
 
   const relatedTracks = useMemo(() => {
     if (!track) {
@@ -211,7 +305,14 @@ export function ListenTrackPage() {
     return [];
   }, [queue, suggestedQueue, playerTrack]);
 
-  const lyrics = track ? getLyrics(track) : "";
+  useEffect(() => {
+    if (activeLyricRef.current) {
+      activeLyricRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
+  }, [activeLyricIndex]);
 
   const loadTrack = useCallback(async () => {
     if (!trackId) {
@@ -229,7 +330,38 @@ export function ListenTrackPage() {
         api.get<AudioTrack[]>("/audio-tracks"),
       ]);
 
-      setTrack(trackResponse.data);
+      let nextTrack = trackResponse.data;
+
+      const hasLyrics =
+        nextTrack.song?.lyrics ||
+        nextTrack.song?.lyric ||
+        nextTrack.song?.content ||
+        nextTrack.description;
+
+      if (
+        !hasLyrics &&
+        nextTrack.song?.artist?.slug &&
+        nextTrack.song?.slug
+      ) {
+        try {
+          const songResponse = await api.get<PublicSongResponse>(
+            `/songs/${nextTrack.song.artist.slug}/${nextTrack.song.slug}`,
+          );
+
+          nextTrack = {
+            ...nextTrack,
+            song: {
+              ...nextTrack.song,
+              ...songResponse.data,
+              artist: songResponse.data.artist || nextTrack.song?.artist || null,
+            },
+          };
+        } catch {
+          // Se a rota pública falhar, mantém os dados atuais.
+        }
+      }
+
+      setTrack(nextTrack);
       setAllTracks(tracksResponse.data);
     } catch (err) {
       setError(getApiErrorMessage(err, "Não foi possível carregar o áudio."));
@@ -242,34 +374,25 @@ export function ListenTrackPage() {
     loadTrack();
   }, [loadTrack]);
 
-  function handlePlayPause() {
+  function handlePlayCurrent() {
     if (!playerTrack) {
       return;
     }
-
-    setError("");
 
     if (isCurrentTrack) {
       setIsPlaying(!isPlaying);
       return;
     }
 
-    playTrack(playerTrack, suggestedQueue.length > 0 ? suggestedQueue : [playerTrack]);
+    const nextQueue =
+      suggestedQueue.length > 0 ? suggestedQueue : [playerTrack];
+
+    playTrack(playerTrack, nextQueue);
   }
 
-  function handleSeek(value: string) {
-    if (!isCurrentTrack) {
-      return;
-    }
-
-    seekToPercent(Number(value));
-  }
-
-  function handlePlayFromList(
-    nextTrack: GlobalAudioTrack,
-    nextQueue: GlobalAudioTrack[],
-  ) {
+  function handleSelectTrack(nextTrack: GlobalAudioTrack, nextQueue: GlobalAudioTrack[]) {
     playTrack(nextTrack, nextQueue);
+    navigate(`/ouvir/${nextTrack.id}`);
   }
 
   if (loading) {
@@ -307,8 +430,12 @@ export function ListenTrackPage() {
     );
   }
 
+  const artistName = getTrackArtist(track);
+  const songTitle = getTrackTitle(track);
+  const imageUrl = getTrackCover(track);
+
   return (
-    <div className="mx-auto max-w-7xl pb-20">
+    <div className="mx-auto max-w-7xl pb-40">
       <Link
         to="/ouvir"
         className="inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-white"
@@ -317,14 +444,14 @@ export function ListenTrackPage() {
         Voltar para ouvir
       </Link>
 
-      <section className="mt-8 grid gap-10 lg:grid-cols-[1fr_430px]">
-        <div className="flex min-h-[620px] flex-col items-center justify-center">
-          <p className="text-center text-lg font-semibold text-violet-200">
-            {artistName}
-          </p>
-
-          <div className="mt-7 w-full max-w-[420px]">
-            <div className="aspect-square overflow-hidden rounded-[2.5rem] shadow-2xl shadow-black/50">
+      <section className="mt-8 grid gap-12 lg:grid-cols-[1fr_430px]">
+        <div className="flex min-h-[620px] flex-col items-center justify-start">
+          <button
+            type="button"
+            onClick={handlePlayCurrent}
+            className="group block w-full max-w-[440px] text-center"
+          >
+            <div className="mx-auto aspect-square w-full overflow-hidden rounded-[2.5rem] shadow-2xl shadow-black/40 transition duration-300 group-hover:scale-[1.01]">
               {imageUrl ? (
                 <img
                   src={imageUrl}
@@ -337,80 +464,33 @@ export function ListenTrackPage() {
                 </div>
               )}
             </div>
-          </div>
+          </button>
 
-          <h1 className="mt-7 max-w-3xl text-center text-4xl font-black tracking-tight text-white md:text-6xl">
+          <p className="mt-7 text-center text-lg font-semibold text-violet-200">
+            {artistName}
+          </p>
+
+          <h1 className="mt-3 max-w-4xl text-center text-4xl font-black tracking-tight text-white md:text-6xl">
             {songTitle}
           </h1>
 
-          <div className="mt-10 w-full max-w-3xl">
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={effectiveProgress}
-              onChange={(event) => handleSeek(event.target.value)}
-              disabled={!isCurrentTrack}
-              className="w-full accent-violet-500 disabled:opacity-40"
-              aria-label="Progresso do áudio"
-            />
-
-            <div className="mt-2 flex justify-between text-xs font-semibold text-slate-400">
-              <span>{formatTime(effectiveCurrentTime)}</span>
-              <span>{formatTime(effectiveDuration)}</span>
-            </div>
-          </div>
-
-          <div className="mt-8 flex items-center justify-center gap-5">
-            <button
-              type="button"
-              onClick={() => skipSeconds(-10)}
-              disabled={!isCurrentTrack}
-              className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <RotateCcw className="h-5 w-5" />
-            </button>
-
-            <button
-              type="button"
-              onClick={handlePlayPause}
-              className="flex h-20 w-20 items-center justify-center rounded-full bg-violet-500 text-white shadow-2xl shadow-violet-950/40 transition hover:bg-violet-400"
-            >
-              {effectiveIsPlaying ? (
-                <Pause className="h-9 w-9 fill-white" />
-              ) : (
-                <Play className="ml-1 h-9 w-9 fill-white" />
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => skipSeconds(10)}
-              disabled={!isCurrentTrack}
-              className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <RotateCw className="h-5 w-5" />
-            </button>
-          </div>
-
-          <div className="mt-8 flex w-full max-w-xl items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3 backdrop-blur">
-            <Volume2 className="h-4 w-4 text-slate-400" />
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={Math.round(volume * 100)}
-              onChange={(event) =>
-                setVolumeValue(Number(event.target.value) / 100)
-              }
-              className="w-full accent-violet-500"
-              aria-label="Volume"
-            />
-          </div>
-
-          <div className="mt-4">
-            <OfflineAudioButton track={playerTrack} />
-          </div>
+          <button
+            type="button"
+            onClick={handlePlayCurrent}
+            className="mt-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold text-white transition hover:bg-white/10"
+          >
+            {isCurrentTrack && isPlaying ? (
+              <>
+                <Pause className="h-4 w-4" />
+                Pausar
+              </>
+            ) : (
+              <>
+                <Play className="h-4 w-4 fill-white" />
+                Tocar agora
+              </>
+            )}
+          </button>
         </div>
 
         <aside className="min-h-[620px]">
@@ -458,7 +538,7 @@ export function ListenTrackPage() {
             </button>
           </div>
 
-          <div className="mt-5 max-h-[650px] overflow-y-auto pr-1">
+          <div className="mt-5">
             {activeTab === "queue" && (
               <div className="grid gap-2">
                 {effectiveQueue.map((item, index) => {
@@ -469,7 +549,7 @@ export function ListenTrackPage() {
                     <button
                       key={`${item.id}-${index}`}
                       type="button"
-                      onClick={() => handlePlayFromList(item, effectiveQueue)}
+                      onClick={() => handleSelectTrack(item, effectiveQueue)}
                       className={[
                         "flex items-center gap-3 rounded-2xl border p-3 text-left transition",
                         isCurrent
@@ -510,13 +590,42 @@ export function ListenTrackPage() {
             )}
 
             {activeTab === "lyrics" && (
-              <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-5 backdrop-blur">
-                {lyrics ? (
-                  <pre className="whitespace-pre-wrap font-sans text-sm leading-7 text-slate-200">
-                    {lyrics}
-                  </pre>
+              <div className="max-h-[650px] overflow-y-auto pr-2">
+                {lyricsTimeline.length > 0 ? (
+                  <div className="space-y-6 py-6">
+                    {lyricsTimeline.map((item, index) => {
+                      const isActive = index === activeLyricIndex;
+                      const isPast = index < activeLyricIndex;
+
+                      return (
+                        <div
+                          key={`${item.time}-${index}`}
+                          ref={isActive ? activeLyricRef : null}
+                          className={[
+                            "transition-all duration-500",
+                            isActive
+                              ? "scale-[1.02] text-white opacity-100"
+                              : isPast
+                                ? "text-slate-500 opacity-60"
+                                : "text-slate-400 opacity-80",
+                          ].join(" ")}
+                        >
+                          <p
+                            className={[
+                              "whitespace-pre-wrap font-black leading-tight",
+                              isActive
+                                ? "text-3xl md:text-4xl"
+                                : "text-xl md:text-2xl",
+                            ].join(" ")}
+                          >
+                            {item.text}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
                 ) : (
-                  <div className="py-10 text-center">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-6 text-center">
                     <FileText className="mx-auto h-10 w-10 text-slate-500" />
                     <p className="mt-4 text-sm font-bold text-white">
                       Letra não cadastrada
@@ -532,7 +641,7 @@ export function ListenTrackPage() {
             {activeTab === "related" && (
               <div className="grid gap-2">
                 {relatedTracks.length === 0 ? (
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-6 text-center backdrop-blur">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-6 text-center">
                     <Sparkles className="mx-auto h-10 w-10 text-slate-500" />
                     <p className="mt-4 text-sm font-bold text-white">
                       Nenhuma música relacionada
@@ -551,7 +660,7 @@ export function ListenTrackPage() {
                       <button
                         key={item.id}
                         type="button"
-                        onClick={() => handlePlayFromList(item, nextQueue)}
+                        onClick={() => handleSelectTrack(item, nextQueue)}
                         className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3 text-left transition hover:bg-white/10"
                       >
                         <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-white/10">
